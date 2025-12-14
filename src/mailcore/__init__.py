@@ -11,8 +11,10 @@ from mailcore.draft import Draft
 from mailcore.folder import Folder
 from mailcore.mailbox import Mailbox
 from mailcore.message import Message
-from mailcore.query import Q
-from mailcore.types import EmailAddress, MessageFlag
+from mailcore.message_list import MessageList
+from mailcore.protocols import IMAPConnection, SMTPConnection
+from mailcore.query import Query
+from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, SendResult
 
 __all__ = [
     "Mailbox",
@@ -20,7 +22,13 @@ __all__ = [
     "Folder",
     "Draft",
     "Attachment",
-    "Q",
+    "Query",
     "EmailAddress",
     "MessageFlag",
+    "MessageList",
+    "FolderInfo",
+    "FolderStatus",
+    "SendResult",
+    "IMAPConnection",
+    "SMTPConnection",
 ]

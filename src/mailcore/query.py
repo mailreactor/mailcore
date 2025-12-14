@@ -1,20 +1,46 @@
-"""Q query builder for constructing email search queries with boolean logic."""
-
-# TODO: Story 3.3 will implement Q query builder
+"""Query class for IMAP search criteria."""
 
 
-class Q:
-    """Query builder for email search with boolean operators (AND, OR, NOT).
+class Query:
+    """IMAP search query builder.
+
+    Stores IMAP search criteria as a list or string and provides
+    a method to convert to IMAP-compatible list format.
+
+    Args:
+        criteria: IMAP search criteria as list or string
 
     Example:
-        query = Q(subject="invoice") & Q(unseen=True)
-        query = Q(from_="alice@example.com") | Q(from_="bob@example.com")
+        >>> query = Query(['FROM', 'alice'])
+        >>> query.to_imap_criteria()
+        ['FROM', 'alice']
+        >>> query2 = Query('ALL')
+        >>> query2.to_imap_criteria()
+        ['ALL']
     """
 
-    def __init__(self, **kwargs: str | bool | int) -> None:
-        """Initialize query with field=value pairs.
+    def __init__(self, criteria: list[str] | str) -> None:
+        """Initialize Query with IMAP criteria.
 
         Args:
-            **kwargs: Query field constraints (subject, from_, to, unseen, etc.)
+            criteria: IMAP search criteria as list or string
         """
-        self.constraints = kwargs
+        self.criteria = criteria
+
+    def to_imap_criteria(self) -> list[str]:
+        """Convert Query to IMAP search criteria list.
+
+        Returns IMAP-compatible criteria list.
+
+        Returns:
+            IMAP criteria list (e.g., ['FROM', 'alice'] or ['ALL'])
+
+        Example:
+            >>> Query(['FROM', 'alice', 'UNSEEN']).to_imap_criteria()
+            ['FROM', 'alice', 'UNSEEN']
+            >>> Query('ALL').to_imap_criteria()
+            ['ALL']
+        """
+        if isinstance(self.criteria, str):
+            return [self.criteria]
+        return self.criteria

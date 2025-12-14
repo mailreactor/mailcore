@@ -9,31 +9,387 @@ Validated in Story 3.0: DOCX attachment 24,184 bytes base64 -> 17,671 bytes deco
 from abc import ABC, abstractmethod
 from typing import Any
 
-# TODO: Story 3.2 will implement full ABC contracts with type hints
-# NOTE: _part_index MUST be str not int (IMAP uses "1", "2", "1.1" for nested parts)
+from mailcore.message_list import MessageList
+from mailcore.query import Query
+from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, SendResult
 
 
 class IMAPConnection(ABC):
-    """Abstract base class for IMAP connection adapters.
+    """Abstract IMAP connection interface using high-level domain operations.
 
-    Implementations provide protocol-specific logic (IMAPClient, aioimaplib, etc.)
-    while exposing a unified async interface.
+    All methods are stateless - folder is specified per operation.
+    Adapter orchestrates low-level IMAP protocol (SELECT, SEARCH, FETCH, etc.).
+
+    Adapter creates and returns domain objects (Message, MessageList) directly.
+    Messages have IMAP injected at creation (Message._imap = self).
+    SMTP is injected later by Folder (lazy injection pattern).
+    No intermediate DTOs - clean domain object flow throughout.
+
+    Note:
+        Connection management (connect, disconnect, pooling, reconnection)
+        is the implementation's responsibility. Mailbox just uses the connection.
+
+        SMTP Injection Pattern:
+        - Adapter creates Messages with _imap=self, _smtp=None
+        - Returns MessageList with pagination metadata
+        - Folder receives MessageList, injects _smtp into each Message
+        - Messages returned to user have both IMAP and SMTP
     """
 
     @abstractmethod
-    async def query_messages(self, folder: str, query: Any, limit: int | None = None) -> Any:
-        """Query messages in a folder."""
+    async def query_messages(
+        self,
+        folder: str,
+        query: Query,
+        include_body: bool = False,
+        include_attachment_metadata: bool = True,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> MessageList:
+        """Query messages from folder matching criteria.
+
+        Combines IMAP operations: SELECT + SEARCH + FETCH + STATUS
+        Creates Message domain objects with IMAP connection injected (Message._imap = self).
+        Returns MessageList with pagination metadata.
+
+        SMTP is NOT injected here - that's done by Folder after receiving MessageList.
+
+        Args:
+            folder: Folder name
+            query: Query object with search criteria (use query.to_imap_criteria() to get IMAP list)
+            include_body: If True, fetch body text/html (lazy loaded if False)
+            include_attachment_metadata: If True, parse attachment metadata from BODYSTRUCTURE.
+                                          Attachment content is ALWAYS lazy-loaded via attachment.read()
+                                          regardless of this flag.
+            limit: Maximum messages to return (None = unlimited)
+            offset: Skip first N messages (for pagination)
+
+        Returns:
+            MessageList with:
+                - messages: List of Message domain objects (with _imap=self, _smtp=None)
+                - total_matches: Total messages matching query (before limit)
+                - total_in_folder: Total messages in folder (unfiltered)
+                - folder: Folder name
+
+            Message metadata always includes: Message-ID, From, To, CC, Subject, Date, Flags, Size
+            Conditionally includes: body_text, body_html, attachment_metadata
+            Message._imap is set to self (the adapter) for lazy loading.
+
+        Note:
+            Adapter decides HOW to fetch efficiently based on what's requested.
+            Adapter creates Message objects with imap=self for lazy loading.
+            Message can call self._imap.fetch_message_body() later if needed.
+            Core domain uses domain language (include_body), not IMAP concepts (FETCH BODY[TEXT]).
+
+        Example:
+            from mailcore import Q
+
+            # Build query using Q builder
+            query = Q.from_('alice@example.com') & Q.unseen()
+
+            messages = await imap.query_messages(
+                'INBOX',
+                query,
+                include_body=False,                # Don't fetch body yet
+                include_attachment_metadata=True,  # Parse attachment metadata from BODYSTRUCTURE
+                limit=50
+            )
+
+            # Messages can lazy load:
+            body = await messages[0].body.get_text()  # Calls self._imap.fetch_message_body()
+        """
+        ...
+
+    @abstractmethod
+    async def fetch_message_body(self, folder: str, uid: int) -> tuple[str | None, str | None]:
+        """Fetch message body parts (lazy loading).
+
+        Combines IMAP operations: SELECT + FETCH BODY[TEXT] + FETCH BODY[HTML]
+
+        Args:
+            folder: Folder name
+            uid: Message UID
+
+        Returns:
+            Tuple of (plain_text, html) - either can be None
+
+        Example:
+            text, html = await imap.fetch_message_body('INBOX', 42)
+        """
+        ...
+
+    @abstractmethod
+    async def fetch_attachment_content(self, folder: str, uid: int, part_index: str) -> bytes:
+        """Fetch attachment content from IMAP (lazy loading).
+
+        Combines IMAP operations: SELECT + FETCH BODY[part]
+
+        Args:
+            folder: Folder name
+            uid: Message UID
+            part_index: IMAP MIME part number (e.g., "2", "1.2", "3.1")
+
+        Returns:
+            Decoded attachment content as bytes
+
+        Note:
+            Adapter MUST base64 decode the content before returning.
+            This was validated in Story 3.0: IMAPClient returns base64-encoded bytes.
+
+            Called by IMAPResolver when attachment.read() is invoked.
+            The part_index comes from the attachment's imap:// URI.
+
+        Example:
+            # Called internally by IMAPResolver
+            content = await imap.fetch_attachment_content(
+                folder='INBOX',
+                uid=42,
+                part_index='2'  # Extracted from imap://INBOX/42/part/2
+            )
+        """
+        ...
+
+    @abstractmethod
+    async def update_message_flags(
+        self,
+        folder: str,
+        uid: int,
+        add_flags: set[MessageFlag] | None = None,
+        remove_flags: set[MessageFlag] | None = None,
+        add_custom: set[str] | None = None,
+        remove_custom: set[str] | None = None,
+    ) -> tuple[set[MessageFlag], set[str]]:
+        """Update message flags.
+
+        Combines IMAP operations: SELECT + STORE
+
+        Args:
+            folder: Folder name
+            uid: Message UID
+            add_flags: Standard flags to add
+            remove_flags: Standard flags to remove
+            add_custom: Custom keywords to add
+            remove_custom: Custom keywords to remove
+
+        Returns:
+            Tuple of (new_flags, new_custom_flags) after update
+
+        Example:
+            new_flags, custom = await imap.update_message_flags(
+                'INBOX',
+                42,
+                add_flags={MessageFlag.SEEN},
+                remove_flags={MessageFlag.FLAGGED}
+            )
+        """
+        ...
+
+    @abstractmethod
+    async def move_message(self, uid: int, from_folder: str, to_folder: str) -> int:
+        """Move message between folders.
+
+        Combines IMAP operations: SELECT + MOVE (or SELECT + COPY + STORE + EXPUNGE)
+
+        Args:
+            uid: Message UID in source folder
+            from_folder: Source folder name
+            to_folder: Destination folder name
+
+        Returns:
+            New UID in destination folder (if server supports COPYUID/MOVE)
+            Returns original UID if server doesn't provide new UID
+
+        Note:
+            Adapter handles MOVE extension vs fallback to COPY + EXPUNGE
+
+        Example:
+            new_uid = await imap.move_message(42, 'INBOX', 'Archive')
+        """
+        ...
+
+    @abstractmethod
+    async def copy_message(self, uid: int, from_folder: str, to_folder: str) -> int:
+        """Copy message between folders.
+
+        Combines IMAP operations: SELECT + COPY
+
+        Args:
+            uid: Message UID in source folder
+            from_folder: Source folder name
+            to_folder: Destination folder name
+
+        Returns:
+            New UID in destination folder (if server supports COPYUID)
+            Returns 0 if server doesn't provide new UID
+
+        Example:
+            new_uid = await imap.copy_message(42, 'INBOX', 'Archive')
+        """
+        ...
+
+    @abstractmethod
+    async def delete_message(self, folder: str, uid: int, permanent: bool = False) -> None:
+        """Delete message (move to Trash or expunge permanently).
+
+        Combines IMAP operations:
+        - permanent=False: SELECT + COPY to Trash + STORE \\Deleted + EXPUNGE
+        - permanent=True: SELECT + STORE \\Deleted + EXPUNGE
+
+        Args:
+            folder: Folder name
+            uid: Message UID
+            permanent: True = expunge immediately, False = move to Trash
+
+        Example:
+            await imap.delete_message('INBOX', 42, permanent=False)
+        """
+        ...
+
+    @abstractmethod
+    async def get_folders(self) -> list[FolderInfo]:
+        """Get all folders with metadata.
+
+        IMAP operation: LIST
+
+        Returns:
+            List of folder information (name, special_use, has_children, etc.)
+
+        Example:
+            folders = await imap.get_folders()
+            for folder in folders:
+                print(f"{folder.name} - {folder.special_use}")
+        """
+        ...
+
+    @abstractmethod
+    async def get_folder_status(self, folder: str) -> FolderStatus:
+        """Get folder statistics without selecting it.
+
+        IMAP operation: STATUS (or SELECT if STATUS not supported)
+
+        Args:
+            folder: Folder name
+
+        Returns:
+            Folder status (message counts, UIDs, flags)
+
+        Example:
+            status = await imap.get_folder_status('INBOX')
+            print(f"Unseen: {status.unseen_count}/{status.message_count}")
+        """
+        ...
+
+    @abstractmethod
+    async def create_folder(self, name: str) -> FolderInfo:
+        """Create new folder.
+
+        IMAP operation: CREATE + LIST (to get metadata)
+
+        Args:
+            name: Folder name (use '/' for hierarchy: 'Projects/2025')
+
+        Returns:
+            Created folder info
+
+        Example:
+            folder = await imap.create_folder('Archive/2025')
+        """
+        ...
+
+    @abstractmethod
+    async def delete_folder(self, name: str) -> None:
+        """Delete folder (must be empty).
+
+        IMAP operation: DELETE
+
+        Args:
+            name: Folder name to delete
+
+        Raises:
+            FolderNotEmptyError: If folder contains messages
+
+        Example:
+            await imap.delete_folder('OldArchive')
+        """
+        ...
+
+    @abstractmethod
+    async def rename_folder(self, old_name: str, new_name: str) -> FolderInfo:
+        """Rename folder.
+
+        IMAP operation: RENAME + LIST (to get new metadata)
+
+        Args:
+            old_name: Current folder name
+            new_name: New folder name
+
+        Returns:
+            Renamed folder info
+
+        Example:
+            folder = await imap.rename_folder('Drafts', 'MyDrafts')
+        """
         ...
 
 
 class SMTPConnection(ABC):
-    """Abstract base class for SMTP connection adapters.
+    """Abstract SMTP connection interface using mailcore domain types.
 
-    Implementations provide protocol-specific logic (aiosmtplib, etc.)
-    while exposing a unified async interface.
+    Defines the SMTP operations mailcore requires.
+    Implementations must inherit from this class.
+
+    Note:
+        Connection management (connect, disconnect, authentication)
+        is the implementation's responsibility. Mailbox just uses the connection.
     """
 
     @abstractmethod
-    async def send_message(self, message: Any) -> str:
-        """Send an email message and return message ID."""
+    async def send_message(
+        self,
+        from_: EmailAddress,
+        to: list[EmailAddress],
+        subject: str,
+        body_text: str | None = None,
+        body_html: str | None = None,
+        cc: list[EmailAddress] | None = None,
+        bcc: list[EmailAddress] | None = None,
+        attachments: list[Any] | None = None,  # list[Attachment] but avoiding circular import
+        in_reply_to: str | None = None,
+        references: list[str] | None = None,
+    ) -> SendResult:
+        """Send email message.
+
+        Args:
+            from_: Sender address
+            to: Recipient addresses (required, at least one)
+            subject: Email subject
+            body_text: Plain text body (optional if body_html provided)
+            body_html: HTML body (optional)
+            cc: CC recipients (optional)
+            bcc: BCC recipients (optional)
+            attachments: File attachments (optional)
+            in_reply_to: Message-ID this replies to (for threading)
+            references: Thread chain (list of Message-IDs)
+
+        Returns:
+            SendResult with message_id and recipient acceptance status
+
+        Raises:
+            SMTPError: If sending fails
+            ConnectionError: If SMTP connection lost
+
+        Example:
+            result = await smtp.send_message(
+                from_=EmailAddress("sender@example.com", "Sender Name"),
+                to=[EmailAddress("recipient@example.com")],
+                subject="Test",
+                body_text="Hello World",
+                body_html="<p>Hello World</p>"
+            )
+            # Returns: SendResult(
+            #     message_id='<msg-123@example.com>',
+            #     accepted=['recipient@example.com'],
+            #     rejected={}
+            # )
+        """
         ...
