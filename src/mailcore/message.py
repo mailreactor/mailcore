@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from mailcore.attachment import Attachment
 from mailcore.body import MessageBody
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.types import EmailAddress, MessageFlag
@@ -34,6 +35,7 @@ class Message:
         size: Message size in bytes
         in_reply_to: Message-ID this replies to (for threading)
         references: Thread chain (list of Message-IDs)
+        attachments: List of attachments (metadata from BODYSTRUCTURE)
 
     Note:
         Not typically instantiated directly - created during folder queries.
@@ -77,6 +79,7 @@ class Message:
         size: int,
         in_reply_to: str | None = None,
         references: list[str] | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> None:
         """Initialize message with metadata and IMAP connection."""
         self._imap = imap
@@ -92,6 +95,7 @@ class Message:
         self._size = size
         self._in_reply_to = in_reply_to
         self._references = references if references is not None else []
+        self._attachments = attachments if attachments is not None else []
         self._smtp: SMTPConnection | None = None
         self._body: MessageBody | None = None
 
@@ -176,6 +180,66 @@ class Message:
         if self._body is None:
             self._body = MessageBody(imap=self._imap, folder=self._folder, uid=self._uid)
         return self._body
+
+    @property
+    def attachments(self) -> list[Attachment]:
+        """List of attachments (metadata from IMAP BODYSTRUCTURE).
+
+        Attachment metadata is always available. Content is fetched on-demand
+        when .read() or .save() is called.
+
+        Returns:
+            List of Attachment instances
+
+        Example:
+            >>> # Access metadata (no network call)
+            >>> for att in message.attachments:
+            ...     print(att.filename, att.size, att.content_type)
+            >>>
+            >>> # Fetch content (lazy load)
+            >>> if message.has_attachments:
+            ...     content = await message.attachments[0].read()
+        """
+        return self._attachments
+
+    @property
+    def has_attachments(self) -> bool:
+        """True if message has non-inline attachments.
+
+        Inline attachments (images in HTML body) are excluded from count.
+
+        Returns:
+            True if message has attachments (excluding inline)
+
+        Example:
+            >>> if message.has_attachments:
+            ...     print(f"Message has {message.attachment_count} attachments")
+        """
+        return any(not att.is_inline for att in self._attachments)
+
+    @property
+    def attachment_count(self) -> int:
+        """Count of non-inline attachments.
+
+        Returns:
+            Number of attachments (excluding inline)
+
+        Example:
+            >>> print(f"Message has {message.attachment_count} attachments")
+        """
+        return sum(1 for att in self._attachments if not att.is_inline)
+
+    @property
+    def inline_count(self) -> int:
+        """Count of inline attachments (images/audio/video in HTML).
+
+        Returns:
+            Number of inline attachments
+
+        Example:
+            >>> print(f"Message has {message.inline_count} inline images")
+        """
+        return sum(1 for att in self._attachments if att.is_inline)
 
     async def mark_read(self) -> None:
         """Mark message as read (\\Seen flag).

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from mailcore.attachment import Attachment
 from mailcore.body import MessageBody
 from mailcore.message import Message
 from mailcore.types import EmailAddress, MessageFlag
@@ -255,3 +256,164 @@ def test_message_repr(sample_message):
     assert "folder='INBOX'" in repr_str
     assert "from=alice@example.com" in repr_str
     assert "subject='Test Subject'" in repr_str
+
+
+def test_message_accepts_attachments_parameter(mock_imap):
+    """Test Message constructor accepts attachments parameter."""
+    att = Attachment(
+        uri="imap://INBOX/42/part/2",
+        filename="report.pdf",
+        size=1024,
+        content_type="application/pdf",
+    )
+
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        attachments=[att],
+    )
+
+    assert len(message._attachments) == 1
+    assert message._attachments[0] is att
+
+
+def test_message_attachments_property(mock_imap):
+    """Test Message.attachments returns list[Attachment]."""
+    att1 = Attachment(
+        uri="imap://INBOX/42/part/2",
+        filename="file1.pdf",
+    )
+    att2 = Attachment(
+        uri="imap://INBOX/42/part/3",
+        filename="file2.jpg",
+    )
+
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        attachments=[att1, att2],
+    )
+
+    attachments = message.attachments
+    assert len(attachments) == 2
+    assert attachments[0] is att1
+    assert attachments[1] is att2
+
+
+def test_message_has_attachments_computed(mock_imap):
+    """Test Message.has_attachments excludes inline attachments."""
+    # Message with non-inline attachment
+    real_att = Attachment(
+        uri="imap://INBOX/42/part/2",
+        filename="report.pdf",
+        is_inline=False,
+    )
+
+    # Message with inline attachment
+    inline_att = Attachment(
+        uri="imap://INBOX/42/part/3",
+        filename="logo.png",
+        is_inline=True,
+    )
+
+    # Message with both
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        attachments=[real_att, inline_att],
+    )
+
+    assert message.has_attachments is True
+
+    # Message with only inline attachments
+    message_inline_only = Message(
+        imap=mock_imap,
+        uid=43,
+        folder="INBOX",
+        message_id="<msg2@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test 2",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        attachments=[inline_att],
+    )
+
+    assert message_inline_only.has_attachments is False
+
+
+def test_message_attachment_count(mock_imap):
+    """Test Message.attachment_count counts non-inline attachments."""
+    att1 = Attachment(uri="uri1", filename="file1.pdf", is_inline=False)
+    att2 = Attachment(uri="uri2", filename="file2.pdf", is_inline=False)
+    inline = Attachment(uri="uri3", filename="logo.png", is_inline=True)
+
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        attachments=[att1, att2, inline],
+    )
+
+    assert message.attachment_count == 2  # Only non-inline
+
+
+def test_message_inline_count(mock_imap):
+    """Test Message.inline_count counts inline attachments."""
+    att1 = Attachment(uri="uri1", filename="file1.pdf", is_inline=False)
+    inline1 = Attachment(uri="uri2", filename="img1.png", is_inline=True)
+    inline2 = Attachment(uri="uri3", filename="img2.jpg", is_inline=True)
+
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        attachments=[att1, inline1, inline2],
+    )
+
+    assert message.inline_count == 2  # Only inline

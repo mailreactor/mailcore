@@ -6,7 +6,7 @@ with protocol adapters for IMAP and SMTP.
 
 __version__ = "1.0.0"
 
-from mailcore.attachment import Attachment
+from mailcore.attachment import Attachment, AttachmentResolver, IMAPResolver, SimpleResolver
 from mailcore.body import MessageBody
 from mailcore.draft import Draft
 from mailcore.folder import Folder
@@ -24,6 +24,9 @@ __all__ = [
     "Folder",
     "Draft",
     "Attachment",
+    "AttachmentResolver",
+    "IMAPResolver",
+    "SimpleResolver",
     "Query",
     "Q",
     "EmailAddress",
