@@ -344,59 +344,135 @@ class Message:
     def reply(self, quote: bool = True) -> "Draft":
         """Create reply draft.
 
-        NOT IMPLEMENTED - Draft class will be implemented in Story 3.6.
-
         Args:
-            quote: Include original message quote
+            quote: Include original message quote (fetched during send())
 
         Returns:
             Draft pre-configured for reply
 
         Raises:
-            NotImplementedError: Draft class not yet implemented
+            ValueError: If SMTP connection not available
 
-        Note:
-            This is a stub for Story 3.6 (Implement Draft).
+        Example:
+            >>> draft = message.reply()
+            >>> await draft.body('Thanks!').send()
         """
-        raise NotImplementedError("Draft class not yet implemented - Story 3.6")
+        # Lazy import to avoid circular import at module level
+        from mailcore.draft import Draft
+
+        # Require SMTP connection (injected by Folder after IMAP query)
+        if self._smtp is None:
+            raise ValueError("SMTP connection not available - Message must come from Folder query")
+
+        # Create Draft with reply headers
+        draft = Draft(
+            smtp=self._smtp,
+            reference_message=self,
+            in_reply_to=self._message_id,
+            references=self._references + [self._message_id],
+            quote=quote,
+        )
+
+        # Pre-populate fields
+        # To: original sender
+        draft.to(self._from.to_rfc5322())
+
+        # Subject: Add "Re:" prefix if not already present
+        if self._subject.startswith("Re:"):
+            draft.subject(self._subject)
+        else:
+            draft.subject(f"Re: {self._subject}")
+
+        return draft
 
     def reply_all(self, quote: bool = True) -> "Draft":
         """Create reply-all draft.
 
-        NOT IMPLEMENTED - Draft class will be implemented in Story 3.6.
-
         Args:
-            quote: Include original message quote
+            quote: Include original message quote (fetched during send())
 
         Returns:
-            Draft pre-configured for reply-all
+            Draft pre-configured for reply-all (includes all original recipients)
 
         Raises:
-            NotImplementedError: Draft class not yet implemented
+            ValueError: If SMTP connection not available
 
-        Note:
-            This is a stub for Story 3.6 (Implement Draft).
+        Example:
+            >>> draft = message.reply_all()
+            >>> await draft.body('Thanks everyone!').send()
         """
-        raise NotImplementedError("Draft class not yet implemented - Story 3.6")
+        # Lazy import to avoid circular import at module level
+        from mailcore.draft import Draft
+
+        # Require SMTP connection (injected by Folder after IMAP query)
+        if self._smtp is None:
+            raise ValueError("SMTP connection not available - Message must come from Folder query")
+
+        # Create Draft with reply headers
+        draft = Draft(
+            smtp=self._smtp,
+            reference_message=self,
+            in_reply_to=self._message_id,
+            references=self._references + [self._message_id],
+            quote=quote,
+        )
+
+        # Pre-populate fields
+        # To: original sender + all original To recipients (excluding self)
+        # Note: We don't have access to "self" email, so include all recipients
+        to_addrs = [self._from.to_rfc5322()] + [addr.to_rfc5322() for addr in self._to]
+        draft.to(to_addrs)
+
+        # CC: all original CC recipients
+        if self._cc:
+            cc_addrs = [addr.to_rfc5322() for addr in self._cc]
+            draft.cc(cc_addrs)
+
+        # Subject: Add "Re:" prefix if not already present
+        if self._subject.startswith("Re:"):
+            draft.subject(self._subject)
+        else:
+            draft.subject(f"Re: {self._subject}")
+
+        return draft
 
     def forward(self, include_attachments: bool = True) -> "Draft":
         """Create forward draft.
 
-        NOT IMPLEMENTED - Draft class will be implemented in Story 3.6.
-
         Args:
-            include_attachments: Include original attachments
+            include_attachments: Include original attachments (fetched during send())
 
         Returns:
             Draft pre-configured for forward
 
         Raises:
-            NotImplementedError: Draft class not yet implemented
+            ValueError: If SMTP connection not available
 
-        Note:
-            This is a stub for Story 3.6 (Implement Draft).
+        Example:
+            >>> draft = message.forward()
+            >>> await draft.to('colleague@example.com').body('FYI').send()
         """
-        raise NotImplementedError("Draft class not yet implemented - Story 3.6")
+        # Lazy import to avoid circular import at module level
+        from mailcore.draft import Draft
+
+        # Require SMTP connection (injected by Folder after IMAP query)
+        if self._smtp is None:
+            raise ValueError("SMTP connection not available - Message must come from Folder query")
+
+        # Create Draft with forward settings
+        draft = Draft(
+            smtp=self._smtp,
+            reference_message=self,
+            include_attachments=include_attachments,
+        )
+
+        # Pre-populate subject: Add "Fwd:" prefix if not already present
+        if self._subject.startswith("Fwd:"):
+            draft.subject(self._subject)
+        else:
+            draft.subject(f"Fwd: {self._subject}")
+
+        return draft
 
     def __repr__(self) -> str:
         """Developer-friendly representation."""

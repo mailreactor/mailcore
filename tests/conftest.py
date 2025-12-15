@@ -25,6 +25,20 @@ def mock_smtp_connection():
     return None
 
 
+@pytest.fixture
+def mock_smtp():
+    """Mock SMTP connection for Draft/Message compose tests (Story 3.6)."""
+    from unittest.mock import AsyncMock
+
+    from mailcore.types import SendResult
+
+    smtp = AsyncMock()
+    smtp.send_message = AsyncMock(
+        return_value=SendResult(message_id="<sent-123@example.com>", accepted=["alice@example.com"], rejected={})
+    )
+    return smtp
+
+
 def create_mock_message(
     uid: int = 1,
     folder: str = "INBOX",

@@ -224,30 +224,6 @@ async def test_message_mark_deleted(sample_message, mock_imap):
     mock_imap.update_message_flags.assert_called_once_with(folder="INBOX", uid=42, add_flags={MessageFlag.DELETED})
 
 
-def test_message_reply_not_implemented(sample_message):
-    """Test reply() raises NotImplementedError."""
-    with pytest.raises(NotImplementedError) as exc_info:
-        sample_message.reply()
-
-    assert "Draft class not yet implemented - Story 3.6" in str(exc_info.value)
-
-
-def test_message_forward_not_implemented(sample_message):
-    """Test forward() raises NotImplementedError."""
-    with pytest.raises(NotImplementedError) as exc_info:
-        sample_message.forward()
-
-    assert "Draft class not yet implemented - Story 3.6" in str(exc_info.value)
-
-
-def test_message_reply_all_not_implemented(sample_message):
-    """Test reply_all() raises NotImplementedError."""
-    with pytest.raises(NotImplementedError) as exc_info:
-        sample_message.reply_all()
-
-    assert "Draft class not yet implemented - Story 3.6" in str(exc_info.value)
-
-
 def test_message_repr(sample_message):
     """Test __repr__ works correctly."""
     repr_str = repr(sample_message)
@@ -417,3 +393,258 @@ def test_message_inline_count(mock_imap):
     )
 
     assert message.inline_count == 2  # Only inline
+
+
+# Message Compose Methods Tests (Story 3.6)
+
+
+def test_message_reply_creates_draft(mock_imap, mock_smtp):
+    """Test reply() creates Draft with correct fields."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com", "Alice"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Question",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        references=["<thread-1@example.com>"],
+    )
+    message._smtp = mock_smtp
+
+    draft = message.reply()
+
+    # Verify Draft created
+    assert draft is not None
+    assert draft._smtp == mock_smtp
+    assert draft._reference_message == message
+    assert draft._quote is True
+
+
+def test_message_reply_sets_in_reply_to(mock_imap, mock_smtp):
+    """Test reply() sets in_reply_to = message_id."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message._smtp = mock_smtp
+
+    draft = message.reply()
+
+    assert draft._in_reply_to == "<original@example.com>"
+
+
+def test_message_reply_sets_references(mock_imap, mock_smtp):
+    """Test reply() includes original message_id in references."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+        references=["<thread-1@example.com>"],
+    )
+    message._smtp = mock_smtp
+
+    draft = message.reply()
+
+    assert draft._references == ["<thread-1@example.com>", "<original@example.com>"]
+
+
+def test_message_reply_prefixes_subject(mock_imap, mock_smtp):
+    """Test reply() adds 'Re:' prefix to subject."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Question",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message._smtp = mock_smtp
+
+    draft = message.reply()
+
+    assert draft._subject == "Re: Question"
+
+    # Test it doesn't duplicate Re:
+    message2 = Message(
+        imap=mock_imap,
+        uid=43,
+        folder="INBOX",
+        message_id="<msg2@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Re: Question",  # Already has Re:
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message2._smtp = mock_smtp
+
+    draft2 = message2.reply()
+    assert draft2._subject == "Re: Question"  # Not "Re: Re: Question"
+
+
+def test_message_reply_requires_smtp(mock_imap):
+    """Test reply() raises ValueError if _smtp is None."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    # No SMTP injected
+
+    with pytest.raises(ValueError, match="SMTP connection not available"):
+        message.reply()
+
+
+def test_message_reply_all_includes_all_recipients(mock_imap, mock_smtp):
+    """Test reply_all() includes all original recipients in to + cc."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com", "Alice"),
+        to=[EmailAddress("bob@example.com", "Bob"), EmailAddress("charlie@example.com", "Charlie")],
+        cc=[EmailAddress("dave@example.com", "Dave")],
+        subject="Team Update",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message._smtp = mock_smtp
+
+    draft = message.reply_all()
+
+    # To: original sender + all original recipients
+    assert len(draft._to) == 3
+    assert "Alice <alice@example.com>" in draft._to
+    assert "Bob <bob@example.com>" in draft._to
+    assert "Charlie <charlie@example.com>" in draft._to
+
+    # CC: all original CC
+    assert draft._cc is not None
+    assert len(draft._cc) == 1
+    assert "Dave <dave@example.com>" in draft._cc
+
+
+def test_message_forward_creates_draft(mock_imap, mock_smtp):
+    """Test forward() creates Draft with correct fields."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Important Document",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message._smtp = mock_smtp
+
+    draft = message.forward()
+
+    assert draft is not None
+    assert draft._smtp == mock_smtp
+    assert draft._reference_message == message
+    assert draft._include_attachments is True
+
+
+def test_message_forward_prefixes_subject(mock_imap, mock_smtp):
+    """Test forward() adds 'Fwd:' prefix to subject."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Important",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message._smtp = mock_smtp
+
+    draft = message.forward()
+
+    assert draft._subject == "Fwd: Important"
+
+    # Test it doesn't duplicate Fwd:
+    message2 = Message(
+        imap=mock_imap,
+        uid=43,
+        folder="INBOX",
+        message_id="<msg2@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Fwd: Important",  # Already has Fwd:
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    message2._smtp = mock_smtp
+
+    draft2 = message2.forward()
+    assert draft2._subject == "Fwd: Important"  # Not "Fwd: Fwd: Important"
+
+
+def test_message_forward_requires_smtp(mock_imap):
+    """Test forward() raises ValueError if _smtp is None."""
+    message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=[],
+        size=100,
+    )
+    # No SMTP injected
+
+    with pytest.raises(ValueError, match="SMTP connection not available"):
+        message.forward()
