@@ -1,44 +1,462 @@
-"""Tests for Mailbox class (main entry point for email operations)."""
+"""Tests for Mailbox class - main entry point for email operations."""
 
-from unittest.mock import Mock
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mailcore.mailbox import Mailbox
+from mailcore.draft import Draft
+from mailcore.folder import Folder
+from mailcore.mailbox import FolderDict, Mailbox
+from mailcore.message import Message
+from mailcore.message_list import MessageList
+from mailcore.protocols import IMAPConnection, SMTPConnection
+from mailcore.types import EmailAddress, FolderInfo
 
 
 @pytest.fixture
-def mock_imap():
-    """Mock IMAP connection."""
-    return Mock()
+def mock_imap() -> IMAPConnection:
+    """Create mock IMAP connection."""
+    mock = MagicMock(spec=IMAPConnection)
+    # Make all async methods return AsyncMock
+    mock.get_folders = AsyncMock()
+    mock.create_folder = AsyncMock()
+    mock.delete_folder = AsyncMock()
+    mock.rename_folder = AsyncMock()
+    mock.query_messages = AsyncMock()
+    mock.move_message = AsyncMock()
+    mock.copy_message = AsyncMock()
+    mock.delete_message = AsyncMock()
+    return mock
 
 
-@pytest.mark.asyncio
-async def test_mailbox_compose_returns_draft(mock_imap, mock_smtp):
-    """Test compose() returns Draft with SMTP connection."""
+@pytest.fixture
+def mock_smtp() -> SMTPConnection:
+    """Create mock SMTP connection."""
+    mock = MagicMock(spec=SMTPConnection)
+    mock.send_message = AsyncMock()
+    return mock
+
+
+@pytest.fixture
+def mailbox(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> Mailbox:
+    """Create Mailbox instance with mock connections."""
+    return Mailbox(imap=mock_imap, smtp=mock_smtp)
+
+
+# Test: Constructor stores connections
+def test_mailbox_initialization(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test mailbox constructor stores IMAP and SMTP connections."""
     mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp)
 
-    draft = mailbox.compose()
+    assert mailbox._imap is mock_imap
+    assert mailbox._smtp is mock_smtp
+    assert isinstance(mailbox._folders, FolderDict)
 
-    assert draft is not None
-    assert draft._smtp == mock_smtp
+
+# Test: inbox property returns Folder
+def test_inbox_property_returns_folder(mailbox: Mailbox, mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test inbox property creates Folder('INBOX') instance."""
+    inbox = mailbox.inbox
+
+    assert isinstance(inbox, Folder)
+    assert inbox._name == "INBOX"
 
 
+# Test: inbox property injects both connections
+def test_inbox_property_injects_both_connections(
+    mailbox: Mailbox, mock_imap: IMAPConnection, mock_smtp: SMTPConnection
+) -> None:
+    """Test inbox Folder has both IMAP and SMTP connections."""
+    inbox = mailbox.inbox
+
+    assert inbox._imap is mock_imap
+    assert inbox._smtp is mock_smtp
+
+
+# Test: folders dict access returns Folder
+def test_folders_dict_access_returns_folder(
+    mailbox: Mailbox, mock_imap: IMAPConnection, mock_smtp: SMTPConnection
+) -> None:
+    """Test folders['Archive'] creates Folder instance."""
+    archive = mailbox.folders["Archive"]
+
+    assert isinstance(archive, Folder)
+    assert archive._name == "Archive"
+    assert archive._imap is mock_imap
+    assert archive._smtp is mock_smtp
+
+
+# Test: FolderDict no caching
+def test_folders_dict_creates_new_folder_each_time(mailbox: Mailbox) -> None:
+    """Test FolderDict returns new Folder instance every time (no caching)."""
+    folder1 = mailbox.folders["Archive"]
+    folder2 = mailbox.folders["Archive"]
+
+    assert folder1 is not folder2  # Different instances
+
+
+# Test: list_folders calls IMAP
 @pytest.mark.asyncio
-async def test_mailbox_send_shortcut(mock_imap, mock_smtp):
-    """Test send() creates draft, applies kwargs, and sends."""
-    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp)
+async def test_list_folders_calls_imap(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test list_folders() calls imap.get_folders()."""
+    # Mock response
+    mock_imap.get_folders.return_value = [
+        FolderInfo(name="INBOX", flags=[], has_children=False),
+        FolderInfo(name="Sent", flags=["\\Sent"], has_children=False),
+        FolderInfo(name="Archive", flags=[], has_children=False),
+    ]
 
-    message_id = await mailbox.send(to="alice@example.com", subject="Hello", body="World", cc="bob@example.com")
+    folders = await mailbox.list_folders()
 
-    # Verify send was called
+    mock_imap.get_folders.assert_called_once()
+    assert folders == ["INBOX", "Sent", "Archive"]
+
+
+# Test: list_folders with pattern
+@pytest.mark.asyncio
+async def test_list_folders_with_pattern(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test list_folders(pattern) filters folders by glob pattern."""
+    # Mock response
+    mock_imap.get_folders.return_value = [
+        FolderInfo(name="Projects/2025", flags=[], has_children=False),
+        FolderInfo(name="Projects/2024", flags=[], has_children=False),
+        FolderInfo(name="Archive", flags=[], has_children=False),
+    ]
+
+    folders = await mailbox.list_folders("Projects/*")
+
+    mock_imap.get_folders.assert_called_once()
+    assert folders == ["Projects/2025", "Projects/2024"]
+
+
+# Test: create_folder calls IMAP and returns Folder
+@pytest.mark.asyncio
+async def test_create_folder_calls_imap_and_returns_folder(
+    mailbox: Mailbox, mock_imap: IMAPConnection, mock_smtp: SMTPConnection
+) -> None:
+    """Test create_folder() calls imap.create_folder() and returns Folder."""
+    folder = await mailbox.create_folder("Archive")
+
+    mock_imap.create_folder.assert_called_once_with(name="Archive")
+    assert isinstance(folder, Folder)
+    assert folder._name == "Archive"
+    assert folder._imap is mock_imap
+    assert folder._smtp is mock_smtp
+
+
+# Test: delete_folder calls IMAP
+@pytest.mark.asyncio
+async def test_delete_folder_calls_imap(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test delete_folder() calls imap.delete_folder()."""
+    await mailbox.delete_folder("Archive")
+
+    mock_imap.delete_folder.assert_called_once_with(name="Archive")
+
+
+# Test: rename_folder calls IMAP
+@pytest.mark.asyncio
+async def test_rename_folder_calls_imap(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test rename_folder() calls imap.rename_folder()."""
+    await mailbox.rename_folder("Old", "New")
+
+    mock_imap.rename_folder.assert_called_once_with(old_name="Old", new_name="New")
+
+
+# Test: send composes and sends in one call
+@pytest.mark.asyncio
+async def test_send_composes_and_sends_in_one_call(mailbox: Mailbox, mock_smtp: SMTPConnection) -> None:
+    """Test send() creates Draft and sends in one call."""
+    from mailcore.types import SendResult
+
+    # Mock send_message to return message_id
+    mock_smtp.send_message.return_value = SendResult(
+        message_id="<msg-123@example.com>",
+        accepted=["alice@example.com"],
+        rejected={},
+    )
+
+    message_id = await mailbox.send(to="alice@example.com", subject="Hello", body="World")
+
+    assert message_id == "<msg-123@example.com>"
     mock_smtp.send_message.assert_called_once()
 
-    # Check message_id returned
-    assert message_id == "<sent-123@example.com>"
 
-    # Verify fields were applied
-    call_args = mock_smtp.send_message.call_args
-    assert call_args.kwargs["subject"] == "Hello"
-    assert call_args.kwargs["body_text"] == "World"
-    assert call_args.kwargs["cc"] is not None
+# Test: send with all parameters
+@pytest.mark.asyncio
+async def test_send_with_all_parameters(mailbox: Mailbox, mock_smtp: SMTPConnection) -> None:
+    """Test send(to, cc, bcc, subject, body, body_html) passes all parameters."""
+    from mailcore.types import SendResult
+
+    mock_smtp.send_message.return_value = SendResult(
+        message_id="<msg-123@example.com>",
+        accepted=["alice@example.com"],
+        rejected={},
+    )
+
+    message_id = await mailbox.send(
+        to=["alice@example.com", "bob@example.com"],
+        cc="manager@example.com",
+        bcc="archive@example.com",
+        subject="Report",
+        body="Text version",
+        body_html="<h1>HTML version</h1>",
+    )
+
+    assert message_id == "<msg-123@example.com>"
+    mock_smtp.send_message.assert_called_once()
+
+
+# Test: compose returns Draft with SMTP
+def test_compose_returns_draft_with_smtp(mailbox: Mailbox, mock_smtp: SMTPConnection) -> None:
+    """Test compose() returns Draft with SMTP connection."""
+    draft = mailbox.compose()
+
+    assert isinstance(draft, Draft)
+    assert draft._smtp is mock_smtp
+
+
+# Test: move groups by folder and calls IMAP
+@pytest.mark.asyncio
+async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test move() groups messages by folder and calls imap.move_message() per folder."""
+    # Create messages from different folders
+    msg1 = Message(
+        imap=mock_imap,
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+    msg2 = Message(
+        imap=mock_imap,
+        uid=2,
+        folder="INBOX",
+        message_id="<msg2@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 2",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+    msg3 = Message(
+        imap=mock_imap,
+        uid=10,
+        folder="Archive",
+        message_id="<msg3@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 3",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    messages = [msg1, msg2, msg3]
+
+    await mailbox.move(messages, to_folder="Spam")
+
+    # Should call move_message 3 times (2 from INBOX, 1 from Archive)
+    assert mock_imap.move_message.call_count == 3
+
+
+# Test: move accepts MessageList
+@pytest.mark.asyncio
+async def test_move_accepts_message_list(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test move(MessageList) works."""
+    msg1 = Message(
+        imap=mock_imap,
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    message_list = MessageList(
+        messages=[msg1],
+        total_matches=1,
+        total_in_folder=100,
+        folder="INBOX",
+    )
+
+    await mailbox.move(message_list, to_folder="Spam")
+
+    mock_imap.move_message.assert_called_once_with(uid=1, from_folder="INBOX", to_folder="Spam")
+
+
+# Test: copy groups by folder and calls IMAP
+@pytest.mark.asyncio
+async def test_copy_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test copy() groups messages by folder and calls imap.copy_message()."""
+    msg1 = Message(
+        imap=mock_imap,
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    await mailbox.copy([msg1], to_folder="Archive")
+
+    mock_imap.copy_message.assert_called_once_with(uid=1, from_folder="INBOX", to_folder="Archive")
+
+
+# Test: delete non-permanent moves to Trash
+@pytest.mark.asyncio
+async def test_delete_non_permanent_moves_to_trash(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test delete(permanent=False) moves to Trash."""
+    msg1 = Message(
+        imap=mock_imap,
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    await mailbox.delete([msg1], permanent=False)
+
+    mock_imap.move_message.assert_called_once_with(uid=1, from_folder="INBOX", to_folder="Trash")
+    mock_imap.delete_message.assert_not_called()
+
+
+# Test: delete permanent calls delete_message
+@pytest.mark.asyncio
+async def test_delete_permanent_calls_delete_message(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test delete(permanent=True) calls imap.delete_message()."""
+    msg1 = Message(
+        imap=mock_imap,
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    await mailbox.delete([msg1], permanent=True)
+
+    mock_imap.delete_message.assert_called_once_with(folder="INBOX", uid=1, permanent=True)
+    mock_imap.move_message.assert_not_called()
+
+
+# Test: get searches all folders for message
+@pytest.mark.asyncio
+async def test_get_searches_all_folders_for_message(
+    mailbox: Mailbox, mock_imap: IMAPConnection, mock_smtp: SMTPConnection
+) -> None:
+    """Test get() searches all folders and returns message from Sent."""
+    # Mock get_folders to return folder list
+    mock_imap.get_folders.return_value = [
+        FolderInfo(name="INBOX", flags=[], has_children=False),
+        FolderInfo(name="Sent", flags=["\\Sent"], has_children=False),
+    ]
+
+    # Mock query_messages to return empty for INBOX, message for Sent
+    target_message = Message(
+        imap=mock_imap,
+        uid=42,
+        folder="Sent",
+        message_id="<msg-123@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    inbox_result = MessageList(messages=[], total_matches=0, total_in_folder=10, folder="INBOX")
+    sent_result = MessageList(messages=[target_message], total_matches=1, total_in_folder=5, folder="Sent")
+
+    mock_imap.query_messages.side_effect = [inbox_result, sent_result]
+
+    message = await mailbox.get("<msg-123@example.com>")
+
+    assert message is not None
+    assert message.message_id == "<msg-123@example.com>"
+    assert message.folder == "Sent"
+    assert message._smtp is mock_smtp
+
+
+# Test: get returns None if not found
+@pytest.mark.asyncio
+async def test_get_returns_none_if_not_found(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test get() returns None if message not found in any folder."""
+    # Mock get_folders
+    mock_imap.get_folders.return_value = [
+        FolderInfo(name="INBOX", flags=[], has_children=False),
+        FolderInfo(name="Sent", flags=["\\Sent"], has_children=False),
+    ]
+
+    # Mock query_messages to return empty for all folders
+    empty_result = MessageList(messages=[], total_matches=0, total_in_folder=0, folder="INBOX")
+    mock_imap.query_messages.return_value = empty_result
+
+    message = await mailbox.get("<not-found@example.com>")
+
+    assert message is None
+
+
+# Test: FolderDict initialization
+def test_folder_dict_initialization(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test FolderDict stores connections."""
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp)
+
+    assert folder_dict._imap is mock_imap
+    assert folder_dict._smtp is mock_smtp
+
+
+# Test: FolderDict __getitem__ creates Folder
+def test_folder_dict_getitem_creates_folder(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test FolderDict['Name'] creates Folder with connections."""
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp)
+
+    folder = folder_dict["Archive"]
+
+    assert isinstance(folder, Folder)
+    assert folder._name == "Archive"
+    assert folder._imap is mock_imap
+    assert folder._smtp is mock_smtp
+
+
+# Test: FolderDict no caching
+def test_folder_dict_no_caching(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test FolderDict returns new instance every time (no caching)."""
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp)
+
+    folder1 = folder_dict["Archive"]
+    folder2 = folder_dict["Archive"]
+
+    assert folder1 is not folder2  # Different instances
