@@ -1,7 +1,10 @@
-"""Tests for Mailbox class - main entry point for email operations."""
+"""Tests for Mailbox class - main entry point for email operations.
+
+Story 3.9: Refactored to use centralized mock fixtures from conftest.py.
+Eliminated 2 duplicate fixtures (mock_imap, mock_smtp).
+"""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,32 +19,11 @@ from mailcore.types import FolderInfo
 
 
 @pytest.fixture
-def mock_imap() -> IMAPConnection:
-    """Create mock IMAP connection."""
-    mock = MagicMock(spec=IMAPConnection)
-    # Make all async methods return AsyncMock
-    mock.get_folders = AsyncMock()
-    mock.create_folder = AsyncMock()
-    mock.delete_folder = AsyncMock()
-    mock.rename_folder = AsyncMock()
-    mock.query_messages = AsyncMock()
-    mock.move_message = AsyncMock()
-    mock.copy_message = AsyncMock()
-    mock.delete_message = AsyncMock()
-    return mock
-
-
-@pytest.fixture
-def mock_smtp() -> SMTPConnection:
-    """Create mock SMTP connection."""
-    mock = MagicMock(spec=SMTPConnection)
-    mock.send_message = AsyncMock()
-    return mock
-
-
-@pytest.fixture
 def mailbox(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> Mailbox:
-    """Create Mailbox instance with mock connections."""
+    """Create Mailbox instance with mock connections.
+
+    Uses centralized mock_imap and mock_smtp from conftest.py.
+    """
     return Mailbox(imap=mock_imap, smtp=mock_smtp)
 
 

@@ -1,4 +1,8 @@
-"""Tests for Folder in folder.py."""
+"""Tests for Folder in folder.py.
+
+Story 3.9: Refactored to use centralized mock fixtures from conftest.py.
+Eliminated 2 duplicate fixtures (mock_imap, mock_smtp).
+"""
 
 from unittest.mock import AsyncMock
 
@@ -7,26 +11,14 @@ from conftest import create_mock_message
 
 from mailcore.folder import Folder
 from mailcore.message_list import MessageList
-from mailcore.protocols import IMAPConnection, SMTPConnection
-
-
-@pytest.fixture
-def mock_imap() -> AsyncMock:
-    """Create mock IMAPConnection."""
-    mock = AsyncMock(spec=IMAPConnection)
-    return mock
-
-
-@pytest.fixture
-def mock_smtp() -> AsyncMock:
-    """Create mock SMTPConnection."""
-    mock = AsyncMock(spec=SMTPConnection)
-    return mock
 
 
 @pytest.fixture
 def folder(mock_imap: AsyncMock, mock_smtp: AsyncMock) -> Folder:
-    """Create Folder instance with mock connections."""
+    """Create Folder instance with mock connections.
+
+    Uses centralized mock_imap and mock_smtp from conftest.py.
+    """
     return Folder(imap=mock_imap, smtp=mock_smtp, name="INBOX")
 
 

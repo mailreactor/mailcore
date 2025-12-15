@@ -1,7 +1,11 @@
-"""Tests for Message class."""
+"""Tests for Message class.
+
+Story 3.9: Refactored to use centralized mock fixtures from conftest.py.
+Eliminated 1 duplicate fixture (mock_imap).
+"""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -13,20 +17,11 @@ from mailcore.types import MessageFlag
 
 
 @pytest.fixture
-def mock_imap():
-    """Create mock IMAP connection."""
-    mock = Mock()
-    mock.fetch_message_body = AsyncMock(return_value=("text body", "<p>html body</p>"))
-    mock.update_message_flags = AsyncMock(return_value=({MessageFlag.SEEN}, set()))
-    mock.move_message = AsyncMock(return_value=43)
-    mock.copy_message = AsyncMock(return_value=44)
-    mock.delete_message = AsyncMock()
-    return mock
-
-
-@pytest.fixture
 def sample_message(mock_imap):
-    """Create sample message for testing."""
+    """Create sample message for testing.
+
+    Uses centralized mock_imap from conftest.py.
+    """
     return Message(
         imap=mock_imap,
         uid=42,

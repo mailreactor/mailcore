@@ -1,4 +1,8 @@
-"""Tests for Draft class (fluent builder for composing emails)."""
+"""Tests for Draft class (fluent builder for composing emails).
+
+Story 3.9: Refactored to use centralized mock fixtures from conftest.py.
+Eliminated 1 duplicate fixture (mock_smtp) - now uses centralized version.
+"""
 
 from unittest.mock import AsyncMock, Mock
 
@@ -9,22 +13,14 @@ from mailcore.body import MessageBody
 from mailcore.draft import Draft
 from mailcore.email_address import EmailAddress
 from mailcore.message import Message
-from mailcore.types import SendResult
-
-
-@pytest.fixture
-def mock_smtp():
-    """Mock SMTP connection for Draft tests."""
-    smtp = AsyncMock()
-    smtp.send_message = AsyncMock(
-        return_value=SendResult(message_id="<sent-123@example.com>", accepted=["alice@example.com"], rejected={})
-    )
-    return smtp
 
 
 @pytest.fixture
 def mock_message(mock_smtp):
-    """Mock Message for reply/forward tests."""
+    """Mock Message for reply/forward tests.
+
+    Uses centralized mock_smtp from conftest.py.
+    """
     mock_imap = Mock()
     msg = Message(
         imap=mock_imap,

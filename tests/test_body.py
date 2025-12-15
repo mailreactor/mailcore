@@ -1,6 +1,10 @@
-"""Tests for MessageBody class."""
+"""Tests for MessageBody class.
 
-from unittest.mock import AsyncMock, Mock
+Story 3.9: Refactored to use centralized mock fixtures from conftest.py.
+Eliminated 1 duplicate fixture (mock_imap).
+"""
+
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,16 +12,14 @@ from mailcore.body import MessageBody
 
 
 @pytest.fixture
-def mock_imap():
-    """Create mock IMAP connection."""
-    mock = Mock()
-    mock.fetch_message_body = AsyncMock(return_value=("plain text content", "<p>html content</p>"))
-    return mock
-
-
-@pytest.fixture
 def message_body(mock_imap):
-    """Create MessageBody instance for testing."""
+    """Create MessageBody instance for testing.
+
+    Uses centralized mock_imap from conftest.py and overrides return value
+    for body-specific tests.
+    """
+    # Override centralized fixture return value for body tests
+    mock_imap.fetch_message_body.return_value = ("plain text content", "<p>html content</p>")
     return MessageBody(imap=mock_imap, folder="INBOX", uid=42)
 
 
