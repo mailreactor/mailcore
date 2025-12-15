@@ -2,8 +2,9 @@
 
 import pytest
 
+from mailcore.email_address import EmailAddress
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
 
 
 def test_cannot_instantiate_imap_connection_directly() -> None:

@@ -5,8 +5,8 @@ from unittest.mock import Mock
 
 import pytest
 
+from mailcore.email_address import EmailAddress
 from mailcore.message import Message
-from mailcore.types import EmailAddress
 
 # pytest-asyncio configuration is handled in pyproject.toml [tool.pytest.ini_options]
 

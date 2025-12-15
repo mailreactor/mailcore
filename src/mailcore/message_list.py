@@ -97,3 +97,31 @@ class MessageList:
             [2, 3]
         """
         return self.messages[index]
+
+    @property
+    def returned_count(self) -> int:
+        """Number of messages in this result (same as len(self)).
+
+        Returns:
+            Number of messages returned in this result
+
+        Example:
+            >>> result = MessageList(messages=[1, 2, 3], total_matches=10, total_in_folder=50, folder="INBOX")
+            >>> result.returned_count
+            3
+        """
+        return len(self.messages)
+
+    @property
+    def has_more(self) -> bool:
+        """Whether more results are available beyond this result.
+
+        Returns:
+            True if total_matches > returned_count
+
+        Example:
+            >>> result = MessageList(messages=[1, 2, 3], total_matches=10, total_in_folder=50, folder="INBOX")
+            >>> result.has_more
+            True
+        """
+        return self.total_matches > len(self.messages)

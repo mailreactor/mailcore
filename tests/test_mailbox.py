@@ -6,12 +6,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from mailcore.draft import Draft
+from mailcore.email_address import EmailAddress
 from mailcore.folder import Folder
 from mailcore.mailbox import FolderDict, Mailbox
 from mailcore.message import Message
 from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import EmailAddress, FolderInfo
+from mailcore.types import FolderInfo
 
 
 @pytest.fixture

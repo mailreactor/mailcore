@@ -9,19 +9,21 @@ __version__ = "1.0.0"
 from mailcore.attachment import Attachment, AttachmentResolver, IMAPResolver, SimpleResolver
 from mailcore.body import MessageBody
 from mailcore.draft import Draft
+from mailcore.email_address import EmailAddress
 from mailcore.folder import Folder
-from mailcore.mailbox import Mailbox
+from mailcore.mailbox import FolderDict, Mailbox
 from mailcore.message import Message
 from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.query import Q, Query
-from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
 
 __all__ = [
     "Mailbox",
     "Message",
     "MessageBody",
     "Folder",
+    "FolderDict",
     "Draft",
     "Attachment",
     "AttachmentResolver",

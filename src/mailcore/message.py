@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING
 
 from mailcore.attachment import Attachment
 from mailcore.body import MessageBody
+from mailcore.email_address import EmailAddress
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import EmailAddress, MessageFlag
+from mailcore.types import MessageFlag
 
 if TYPE_CHECKING:
     from mailcore.draft import Draft

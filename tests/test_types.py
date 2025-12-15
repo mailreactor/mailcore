@@ -1,6 +1,7 @@
 """Tests for domain types in types.py."""
 
-from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.email_address import EmailAddress
+from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
 
 
 def test_email_address_to_rfc5322_with_name() -> None:

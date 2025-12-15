@@ -3,9 +3,9 @@
 from pathlib import Path
 
 from mailcore.attachment import Attachment
+from mailcore.email_address import EmailAddress
 from mailcore.message import Message
 from mailcore.protocols import SMTPConnection
-from mailcore.types import EmailAddress
 
 
 class Draft:

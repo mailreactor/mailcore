@@ -7,8 +7,9 @@ import pytest
 
 from mailcore.attachment import Attachment
 from mailcore.body import MessageBody
+from mailcore.email_address import EmailAddress
 from mailcore.message import Message
-from mailcore.types import EmailAddress, MessageFlag
+from mailcore.types import MessageFlag
 
 
 @pytest.fixture

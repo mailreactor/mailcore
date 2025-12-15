@@ -9,9 +9,10 @@ Validated in Story 3.0: DOCX attachment 24,184 bytes base64 -> 17,671 bytes deco
 from abc import ABC, abstractmethod
 from typing import Any
 
+from mailcore.email_address import EmailAddress
 from mailcore.message_list import MessageList
 from mailcore.query import Query
-from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
 
 
 class IMAPConnection(ABC):

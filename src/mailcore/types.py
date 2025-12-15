@@ -1,54 +1,7 @@
-"""Domain types for email addresses, message flags, and other email concepts."""
+"""Domain types for message flags, folder info, and SMTP results."""
 
 from dataclasses import dataclass
 from enum import Enum
-
-
-class EmailAddress:
-    """RFC 5322 compliant email address with name and address parts.
-
-    Immutable value object representing an email address with optional display name.
-
-    Args:
-        email: Email address (e.g., "alice@example.com")
-        name: Display name (optional, e.g., "Alice Smith")
-
-    Example:
-        >>> addr = EmailAddress("alice@example.com", "Alice Smith")
-        >>> addr.to_rfc5322()
-        'Alice Smith <alice@example.com>'
-        >>> addr_no_name = EmailAddress("bob@example.com")
-        >>> addr_no_name.to_rfc5322()
-        'bob@example.com'
-    """
-
-    def __init__(self, email: str, name: str | None = None) -> None:
-        """Initialize email address.
-
-        Args:
-            email: Email address (required)
-            name: Display name (optional)
-        """
-        self.email = email
-        self.name = name
-
-    def to_rfc5322(self) -> str:
-        """Format email address for RFC 5322 headers.
-
-        Returns:
-            RFC 5322 formatted address string.
-            If name is present: "Name <email@example.com>"
-            If name is None: "email@example.com"
-
-        Example:
-            >>> EmailAddress("alice@example.com", "Alice Smith").to_rfc5322()
-            'Alice Smith <alice@example.com>'
-            >>> EmailAddress("bob@example.com").to_rfc5322()
-            'bob@example.com'
-        """
-        if self.name:
-            return f"{self.name} <{self.email}>"
-        return self.email
 
 
 class MessageFlag(Enum):
