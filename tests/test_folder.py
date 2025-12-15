@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from conftest import create_mock_message
 
 from mailcore.folder import Folder
-from mailcore.message import Message
 from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
 
@@ -111,10 +111,10 @@ async def test_folder_list_calls_imap(folder: Folder, mock_imap: AsyncMock, mock
 async def test_folder_injects_smtp(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify messages returned from list() have ._smtp injected."""
     # Create mock messages without SMTP
-    msg1 = Message(uid="1", folder="INBOX")
+    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
     msg1._smtp = None
 
-    msg2 = Message(uid="2", folder="INBOX")
+    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
     msg2._smtp = None
 
     message_list = MessageList(
@@ -156,7 +156,7 @@ async def test_folder_list_with_pagination(folder: Folder, mock_imap: AsyncMock)
 async def test_folder_first_returns_first_message(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify first() returns first message or None when empty."""
     # Test with messages
-    msg = Message(uid="1", folder="INBOX")
+    msg = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
     msg._smtp = None
 
     message_list = MessageList(
@@ -191,7 +191,7 @@ async def test_folder_first_returns_first_message(folder: Folder, mock_imap: Asy
 @pytest.mark.asyncio
 async def test_folder_first_with_kwargs(folder: Folder, mock_imap: AsyncMock) -> None:
     """Verify first(from_='alice') applies kwargs then returns first."""
-    msg = Message(uid="1", folder="INBOX")
+    msg = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
     msg._smtp = None
 
     message_list = MessageList(
@@ -288,7 +288,7 @@ async def test_folder_immutability_reuse(folder: Folder) -> None:
 @pytest.mark.asyncio
 async def test_folder_first_with_invalid_kwarg(folder: Folder, mock_imap: AsyncMock) -> None:
     """Verify first() with invalid kwargs doesn't break."""
-    msg = Message(uid="1", folder="INBOX")
+    msg = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
     msg._smtp = None
 
     message_list = MessageList(

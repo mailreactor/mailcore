@@ -7,6 +7,7 @@ with protocol adapters for IMAP and SMTP.
 __version__ = "1.0.0"
 
 from mailcore.attachment import Attachment
+from mailcore.body import MessageBody
 from mailcore.draft import Draft
 from mailcore.folder import Folder
 from mailcore.mailbox import Mailbox
@@ -19,6 +20,7 @@ from mailcore.types import EmailAddress, FolderInfo, FolderStatus, MessageFlag, 
 __all__ = [
     "Mailbox",
     "Message",
+    "MessageBody",
     "Folder",
     "Draft",
     "Attachment",
