@@ -34,7 +34,7 @@ class MockMessage:
     cc: list[EmailAddress]
     subject: str
     date: datetime
-    flags: set[str] = field(default_factory=set)
+    flags: set[MessageFlag] = field(default_factory=set)
     custom_flags: set[str] = field(default_factory=set)
     size: int = 100
     in_reply_to: str | None = None
@@ -120,7 +120,8 @@ class MockIMAPConnection(IMAPConnection):
                     cc=mock_msg.cc,
                     subject=mock_msg.subject,
                     date=mock_msg.date,
-                    flags=list(mock_msg.flags),
+                    flags=mock_msg.flags,
+                    custom_flags=mock_msg.custom_flags,
                     size=mock_msg.size,
                     in_reply_to=mock_msg.in_reply_to,
                     references=mock_msg.references,
@@ -165,25 +166,25 @@ class MockIMAPConnection(IMAPConnection):
                 ]
                 i += 2
             elif criterion == "UNSEEN":
-                filtered = [m for m in filtered if "\\Seen" not in m.flags]
+                filtered = [m for m in filtered if MessageFlag.SEEN not in m.flags]
                 i += 1
             elif criterion == "SEEN":
-                filtered = [m for m in filtered if "\\Seen" in m.flags]
+                filtered = [m for m in filtered if MessageFlag.SEEN in m.flags]
                 i += 1
             elif criterion == "ANSWERED":
-                filtered = [m for m in filtered if "\\Answered" in m.flags]
+                filtered = [m for m in filtered if MessageFlag.ANSWERED in m.flags]
                 i += 1
             elif criterion == "FLAGGED":
-                filtered = [m for m in filtered if "\\Flagged" in m.flags]
+                filtered = [m for m in filtered if MessageFlag.FLAGGED in m.flags]
                 i += 1
             elif criterion == "DELETED":
-                filtered = [m for m in filtered if "\\Deleted" in m.flags]
+                filtered = [m for m in filtered if MessageFlag.DELETED in m.flags]
                 i += 1
             elif criterion == "DRAFT":
-                filtered = [m for m in filtered if "\\Draft" in m.flags]
+                filtered = [m for m in filtered if MessageFlag.DRAFT in m.flags]
                 i += 1
             elif criterion == "RECENT":
-                filtered = [m for m in filtered if "\\Recent" in m.flags]
+                filtered = [m for m in filtered if MessageFlag.RECENT in m.flags]
                 i += 1
             elif criterion == "ALL":
                 # No filtering
@@ -238,13 +239,11 @@ class MockIMAPConnection(IMAPConnection):
                 if msg.uid == uid:
                     # Add standard flags
                     if add_flags:
-                        for flag in add_flags:
-                            msg.flags.add(flag.value)
+                        msg.flags.update(add_flags)
 
                     # Remove standard flags
                     if remove_flags:
-                        for flag in remove_flags:
-                            msg.flags.discard(flag.value)
+                        msg.flags.difference_update(remove_flags)
 
                     # Add custom flags
                     if add_custom:
@@ -254,10 +253,7 @@ class MockIMAPConnection(IMAPConnection):
                     if remove_custom:
                         msg.custom_flags.difference_update(remove_custom)
 
-                    # Convert back to enums
-                    standard_flags = {MessageFlag(f) for f in msg.flags if f in [e.value for e in MessageFlag]}
-
-                    return (standard_flags, msg.custom_flags)
+                    return (msg.flags, msg.custom_flags)
 
             return (set(), set())
 

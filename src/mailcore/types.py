@@ -22,6 +22,10 @@ class MessageFlag(Enum):
         <MessageFlag.SEEN: '\\\\Seen'>
         >>> MessageFlag.FLAGGED.value
         '\\\\Flagged'
+        >>> MessageFlag.from_imap("\\\\Seen")
+        <MessageFlag.SEEN: '\\\\Seen'>
+        >>> MessageFlag.from_imap("$Forwarded")  # Custom flag
+        None
     """
 
     SEEN = "\\Seen"
@@ -30,6 +34,30 @@ class MessageFlag(Enum):
     DELETED = "\\Deleted"
     DRAFT = "\\Draft"
     RECENT = "\\Recent"
+
+    @classmethod
+    def from_imap(cls, flag_str: str) -> "MessageFlag | None":
+        """Convert IMAP flag string to MessageFlag enum.
+
+        Uses enum value lookup to convert IMAP protocol strings to domain types.
+        Returns None for custom/non-standard flags.
+
+        Args:
+            flag_str: IMAP flag string (e.g., "\\Seen", "\\Flagged")
+
+        Returns:
+            MessageFlag enum or None if not a standard flag
+
+        Example:
+            >>> MessageFlag.from_imap("\\Seen")
+            <MessageFlag.SEEN: '\\Seen'>
+            >>> MessageFlag.from_imap("$Forwarded")
+            None
+        """
+        try:
+            return cls(flag_str)
+        except ValueError:
+            return None
 
 
 @dataclass

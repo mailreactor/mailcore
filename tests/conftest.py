@@ -191,6 +191,6 @@ def create_mock_message(
         cc=[],
         subject=subject,
         date=datetime.now(timezone.utc),
-        flags=[],
+        flags=set(),
         size=100,
     )

@@ -30,6 +30,24 @@ def test_message_flag_enum_values() -> None:
     assert len(flags) == 6
 
 
+def test_message_flag_from_imap_standard_flags() -> None:
+    """Verify MessageFlag.from_imap() converts standard IMAP flags."""
+    assert MessageFlag.from_imap("\\Seen") == MessageFlag.SEEN
+    assert MessageFlag.from_imap("\\Answered") == MessageFlag.ANSWERED
+    assert MessageFlag.from_imap("\\Flagged") == MessageFlag.FLAGGED
+    assert MessageFlag.from_imap("\\Deleted") == MessageFlag.DELETED
+    assert MessageFlag.from_imap("\\Draft") == MessageFlag.DRAFT
+    assert MessageFlag.from_imap("\\Recent") == MessageFlag.RECENT
+
+
+def test_message_flag_from_imap_custom_flags() -> None:
+    """Verify MessageFlag.from_imap() returns None for custom flags."""
+    assert MessageFlag.from_imap("$Forwarded") is None
+    assert MessageFlag.from_imap("$MDNSent") is None
+    assert MessageFlag.from_imap("CustomFlag") is None
+    assert MessageFlag.from_imap("\\InvalidFlag") is None
+
+
 def test_folder_info_dataclass() -> None:
     """Verify FolderInfo dataclass structure."""
     info = FolderInfo(

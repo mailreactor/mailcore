@@ -32,8 +32,9 @@ class Message:
         cc: CC recipients
         subject: Subject line
         date: Message date
-        flags: IMAP flags (\\Seen, \\Flagged, etc.)
+        flags: Standard IMAP flags (MessageFlag enum)
         size: Message size in bytes
+        custom_flags: Custom IMAP keywords (e.g., $Forwarded, $MDNSent)
         in_reply_to: Message-ID this replies to (for threading)
         references: Thread chain (list of Message-IDs)
         attachments: List of attachments (metadata from BODYSTRUCTURE)
@@ -54,10 +55,10 @@ class Message:
         ...     from_=EmailAddress('alice@example.com', 'Alice Smith'),
         ...     to=[EmailAddress('bob@example.com')],
         ...     cc=[],
-        ...     subject='Test Subject',
-        ...     date=datetime.now(),
-        ...     flags=['\\\\Seen'],
-        ...     size=1024
+         ...     subject='Test Subject',
+         ...     date=datetime.now(),
+         ...     flags={MessageFlag.SEEN},
+         ...     size=1024
         ... )
         >>> # Access metadata (no network call)
         >>> print(message.subject)  # 'Test Subject'
@@ -76,8 +77,9 @@ class Message:
         cc: list[EmailAddress],
         subject: str,
         date: datetime,
-        flags: list[str],
+        flags: set[MessageFlag],
         size: int,
+        custom_flags: set[str] | None = None,
         in_reply_to: str | None = None,
         references: list[str] | None = None,
         attachments: list[Attachment] | None = None,
@@ -93,6 +95,7 @@ class Message:
         self._subject = subject
         self._date = date
         self._flags = flags
+        self._custom_flags = custom_flags if custom_flags is not None else set()
         self._size = size
         self._in_reply_to = in_reply_to
         self._references = references if references is not None else []
@@ -141,9 +144,26 @@ class Message:
         return self._date
 
     @property
-    def flags(self) -> list[str]:
-        """IMAP flags (\\Seen, \\Flagged, etc.)."""
+    def flags(self) -> set[MessageFlag]:
+        """Standard IMAP flags.
+
+        Check membership with: MessageFlag.SEEN in message.flags
+
+        Example:
+            >>> if MessageFlag.SEEN in message.flags:
+            ...     print("Message is read")
+        """
         return self._flags
+
+    @property
+    def custom_flags(self) -> set[str]:
+        """Custom IMAP keywords (e.g., $Forwarded, $MDNSent).
+
+        Example:
+            >>> if "$Forwarded" in message.custom_flags:
+            ...     print("Message was forwarded")
+        """
+        return self._custom_flags
 
     @property
     def size(self) -> int:
