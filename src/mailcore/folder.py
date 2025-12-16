@@ -10,6 +10,8 @@ Connection Injection Pattern (from Tech Spec):
 - This enables Message.reply() and Message.forward() operations
 """
 
+from collections.abc import AsyncIterator
+
 from mailcore.message import Message
 from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
@@ -194,6 +196,24 @@ class Folder:
             msg._smtp = self._smtp
 
         return message_list
+
+    async def __aiter__(self) -> AsyncIterator[Message]:
+        """Async iteration - stream all matching messages (no limit).
+
+        Yields messages one at a time by calling list() internally.
+        Note: This loads all messages first, then yields. For true
+        streaming, would need IMAP FETCH in batches.
+
+        Yields:
+            Message instances one at a time
+
+        Example:
+            async for message in folder.unseen():
+                print(message.subject)
+        """
+        message_list = await self.list()
+        for message in message_list.messages:
+            yield message
 
     async def first(self, **kwargs: str) -> Message | None:
         """Get first matching message.

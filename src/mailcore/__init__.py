@@ -10,6 +10,7 @@ from mailcore.attachment import Attachment, AttachmentResolver, IMAPResolver, Si
 from mailcore.body import MessageBody
 from mailcore.draft import Draft
 from mailcore.email_address import EmailAddress
+from mailcore.exceptions import FolderNotFoundError, MailcoreError
 from mailcore.folder import Folder
 from mailcore.mailbox import FolderDict, Mailbox
 from mailcore.message import Message
@@ -39,4 +40,6 @@ __all__ = [
     "SendResult",
     "IMAPConnection",
     "SMTPConnection",
+    "MailcoreError",
+    "FolderNotFoundError",
 ]

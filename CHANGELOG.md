@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **FolderNotFoundError exception class** (Story 3.11.3)
+  - New exception in `mailcore.exceptions` module for IMAP folder not found errors
+  - Inherits from `MailcoreError` base exception
+  - Attributes:
+    - `folder: str` - The folder name that was not found
+  - Usage:
+    ```python
+    from mailcore import FolderNotFoundError
+    
+    try:
+        messages = await mailbox.folders["NONEXISTENT"].list()
+    except FolderNotFoundError as e:
+        print(f"Folder '{e.folder}' does not exist")
+    ```
+  - Protocol adapters (mailcore-imapclient, mailcore-aioimaplib) should wrap IMAP folder errors in this exception
+
 ### Changed - BREAKING
 
 - **Message.flags type changed from `list[str]` to `set[MessageFlag]`** (Story 3.11.1)
