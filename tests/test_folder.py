@@ -296,3 +296,125 @@ async def test_folder_first_with_invalid_kwarg(folder: Folder, mock_imap: AsyncM
 
     # Should still work
     assert result is msg
+
+
+# Story 3.3.1: Async Iteration Protocol Tests
+
+
+@pytest.mark.asyncio
+async def test_folder_async_iteration_all_messages(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
+    """Verify async for iterates over all messages in folder."""
+    # Setup mock to return MessageList with 3 messages
+    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
+    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
+    msg3 = create_mock_message(uid=3, folder="INBOX", mock_imap=mock_imap)
+
+    message_list = MessageList(
+        messages=[msg1, msg2, msg3],
+        total_matches=3,
+        total_in_folder=3,
+        folder="INBOX",
+    )
+    mock_imap.query_messages.return_value = message_list
+
+    # Collect messages via async for
+    collected = []
+    async for message in folder:
+        collected.append(message)
+
+    # Verify count and messages
+    assert len(collected) == 3
+    assert collected[0] is msg1
+    assert collected[1] is msg2
+    assert collected[2] is msg3
+
+    # Verify SMTP was injected (by list() method)
+    assert collected[0]._smtp is mock_smtp
+    assert collected[1]._smtp is mock_smtp
+    assert collected[2]._smtp is mock_smtp
+
+
+@pytest.mark.asyncio
+async def test_folder_async_iteration_with_query(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
+    """Verify async for applies query filters correctly."""
+    # Setup mock to return unseen messages
+    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
+    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
+
+    message_list = MessageList(
+        messages=[msg1, msg2],
+        total_matches=2,
+        total_in_folder=10,
+        folder="INBOX",
+    )
+    mock_imap.query_messages.return_value = message_list
+
+    # Apply query and iterate
+    collected = []
+    async for message in folder.unseen():
+        collected.append(message)
+
+    # Verify query was applied
+    call_args = mock_imap.query_messages.call_args
+    query = call_args[0][1]
+    assert "UNSEEN" in query.to_imap_criteria()
+
+    # Verify messages yielded
+    assert len(collected) == 2
+    assert collected[0] is msg1
+    assert collected[1] is msg2
+
+
+@pytest.mark.asyncio
+async def test_folder_async_iteration_empty_folder(folder: Folder, mock_imap: AsyncMock) -> None:
+    """Verify async for on empty folder completes without error."""
+    # Setup mock to return empty MessageList
+    message_list = MessageList(
+        messages=[],
+        total_matches=0,
+        total_in_folder=0,
+        folder="INBOX",
+    )
+    mock_imap.query_messages.return_value = message_list
+
+    # Iterate over empty folder
+    collected = []
+    async for message in folder:
+        collected.append(message)
+
+    # Verify no iterations performed
+    assert len(collected) == 0
+
+
+@pytest.mark.asyncio
+async def test_folder_async_iteration_matches_list(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
+    """Verify async for yields same messages as .list() in same order."""
+    # Setup mock data
+    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
+    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
+    msg3 = create_mock_message(uid=3, folder="INBOX", mock_imap=mock_imap)
+
+    message_list = MessageList(
+        messages=[msg1, msg2, msg3],
+        total_matches=3,
+        total_in_folder=3,
+        folder="INBOX",
+    )
+    mock_imap.query_messages.return_value = message_list
+
+    # Collect via async for
+    collected_iter = []
+    async for message in folder:
+        collected_iter.append(message)
+
+    # Reset mock call count
+    mock_imap.query_messages.reset_mock()
+    mock_imap.query_messages.return_value = message_list
+
+    # Collect via .list()
+    list_result = await folder.list()
+
+    # Verify equivalence
+    assert len(collected_iter) == len(list_result.messages)
+    for i, msg in enumerate(collected_iter):
+        assert msg is list_result.messages[i]
