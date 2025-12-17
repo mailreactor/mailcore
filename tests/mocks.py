@@ -453,6 +453,12 @@ class MockSMTPConnection(SMTPConnection):
         """Initialize mock SMTP with empty sent messages list."""
         self._sent_messages: list[dict[str, Any]] = []
         self._message_counter = 1
+        self._username = "mock@example.com"
+
+    @property
+    def username(self) -> str:
+        """Get SMTP authentication username."""
+        return self._username
 
     async def send_message(
         self,

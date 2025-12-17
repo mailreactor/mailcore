@@ -17,6 +17,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from mailcore.draft import Draft
+from mailcore.email_address import EmailAddress
 from mailcore.folder import Folder
 from mailcore.message import Message
 from mailcore.message_list import MessageList
@@ -32,9 +33,10 @@ class FolderDict:
     Args:
         imap: IMAP connection for folder operations
         smtp: SMTP connection for message composition
+        default_sender: Default sender email address for message composition
 
     Example:
-        >>> folders = FolderDict(imap=imap_adapter, smtp=smtp_adapter)
+        >>> folders = FolderDict(imap=imap_adapter, smtp=smtp_adapter, default_sender='user@example.com')
         >>> archive = folders['Archive']  # Returns Folder('Archive')
         >>> sent = folders['Sent']        # Returns Folder('Sent')
         >>> # No caching - new instance every time
@@ -43,15 +45,17 @@ class FolderDict:
         >>> assert folder1 is not folder2  # True
     """
 
-    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection) -> None:
+    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection, default_sender: str) -> None:
         """Initialize FolderDict with connections.
 
         Args:
             imap: IMAP connection (injected directly)
             smtp: SMTP connection (injected directly)
+            default_sender: Default sender email address (validated by Mailbox)
         """
         self._imap = imap
         self._smtp = smtp
+        self._default_sender = default_sender
 
     def __getitem__(self, name: str) -> Folder:
         """Get folder by name (creates new instance, no caching).
@@ -63,11 +67,11 @@ class FolderDict:
             New Folder instance with connections injected
 
         Example:
-            >>> folders = FolderDict(imap, smtp)
+            >>> folders = FolderDict(imap, smtp, default_sender)
             >>> archive = folders['Archive']
             >>> projects = folders['Projects/2025']
         """
-        return Folder(imap=self._imap, smtp=self._smtp, name=name)
+        return Folder(imap=self._imap, smtp=self._smtp, name=name, default_sender=self._default_sender)
 
 
 class Mailbox:
@@ -106,24 +110,68 @@ class Mailbox:
         >>> await mailbox.send(to='alice@example.com', subject='Hi', body='Hello')
     """
 
-    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection) -> None:
+    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection, default_sender: str | None = None) -> None:
         """Initialize mailbox with IMAP and SMTP connections.
 
         Args:
             imap: Connected and authenticated IMAP connection
             smtp: Connected and authenticated SMTP connection
+            default_sender: Default sender email (optional).
+                If not provided, attempts to parse smtp.username as email.
+
+        Raises:
+            ValueError: If default_sender not provided and smtp.username is not valid email
 
         Note:
             Connection management (connect, disconnect, pooling, reconnection)
             is the caller's responsibility.
 
         Example:
+            >>> # Auto-detect from SMTP username (if valid email)
             >>> mailbox = Mailbox(imap=imap_adapter, smtp=smtp_adapter)
+            >>>
+            >>> # Explicit default_sender (required if smtp.username not email)
+            >>> mailbox = Mailbox(imap=imap_adapter, smtp=smtp_adapter, default_sender='me@example.com')
         """
         self._imap = imap
         self._smtp = smtp
+        self._default_sender = self._validate_default_sender(smtp, default_sender)
         # Create FolderDict with direct connection injection (NO parent reference)
-        self._folders = FolderDict(imap=self._imap, smtp=self._smtp)
+        self._folders = FolderDict(imap=self._imap, smtp=self._smtp, default_sender=self._default_sender)
+
+    @staticmethod
+    def _validate_default_sender(smtp: SMTPConnection, default_sender: str | None) -> str:
+        """Validate and return default sender email.
+
+        Args:
+            smtp: SMTP connection with username property
+            default_sender: Optional explicit default sender
+
+        Returns:
+            Validated email address string
+
+        Raises:
+            ValueError: If default_sender invalid or smtp.username not email when auto-detecting
+        """
+        if default_sender is not None:
+            # Explicit default_sender provided - validate it
+            try:
+                EmailAddress(email=default_sender)
+                return default_sender
+            except ValueError as e:
+                raise ValueError(f"Invalid default_sender email address: '{default_sender}'. {str(e)}") from e
+
+        # Try to use smtp.username as default_sender
+        try:
+            EmailAddress(email=smtp.username)
+            return smtp.username
+        except ValueError:
+            # smtp.username is not valid email - require explicit default_sender
+            raise ValueError(
+                f"Cannot use SMTP username '{smtp.username}' as default sender address because "
+                "it is not a valid email address. Please provide explicit default_sender parameter:\n"
+                "  Mailbox(imap=imap, smtp=smtp, default_sender='your@email.com')"
+            )
 
     @property
     def inbox(self) -> Folder:
@@ -136,7 +184,7 @@ class Mailbox:
             >>> inbox = mailbox.inbox
             >>> messages = await inbox.unseen().list(limit=50)
         """
-        return Folder(imap=self._imap, smtp=self._smtp, name="INBOX")
+        return Folder(imap=self._imap, smtp=self._smtp, name="INBOX", default_sender=self._default_sender)
 
     @property
     def folders(self) -> FolderDict:
@@ -162,7 +210,7 @@ class Mailbox:
             >>> draft = mailbox.compose()
             >>> await draft.to('alice@example.com').subject('Hi').body('Hello').send()
         """
-        return Draft(smtp=self._smtp)
+        return Draft(smtp=self._smtp, default_sender=self._default_sender)
 
     async def send(
         self,
@@ -264,7 +312,7 @@ class Mailbox:
             >>> project = await mailbox.create_folder('Projects/2025')
         """
         await self._imap.create_folder(name=name)
-        return Folder(imap=self._imap, smtp=self._smtp, name=name)
+        return Folder(imap=self._imap, smtp=self._smtp, name=name, default_sender=self._default_sender)
 
     async def delete_folder(self, name: str) -> None:
         """Delete folder (must be empty).

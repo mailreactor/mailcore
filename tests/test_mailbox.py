@@ -23,6 +23,7 @@ def mailbox(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> Mailbox:
     """Create Mailbox instance with mock connections.
 
     Uses centralized mock_imap and mock_smtp from conftest.py.
+    Story 3.14: mock_smtp has username='user@example.com' so auto-detect works.
     """
     return Mailbox(imap=mock_imap, smtp=mock_smtp)
 
@@ -415,7 +416,7 @@ async def test_get_returns_none_if_not_found(mailbox: Mailbox, mock_imap: IMAPCo
 # Test: FolderDict initialization
 def test_folder_dict_initialization(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
     """Test FolderDict stores connections."""
-    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp)
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_sender="test@example.com")
 
     assert folder_dict._imap is mock_imap
     assert folder_dict._smtp is mock_smtp
@@ -424,7 +425,7 @@ def test_folder_dict_initialization(mock_imap: IMAPConnection, mock_smtp: SMTPCo
 # Test: FolderDict __getitem__ creates Folder
 def test_folder_dict_getitem_creates_folder(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
     """Test FolderDict['Name'] creates Folder with connections."""
-    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp)
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_sender="test@example.com")
 
     folder = folder_dict["Archive"]
 
@@ -437,9 +438,42 @@ def test_folder_dict_getitem_creates_folder(mock_imap: IMAPConnection, mock_smtp
 # Test: FolderDict no caching
 def test_folder_dict_no_caching(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
     """Test FolderDict returns new instance every time (no caching)."""
-    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp)
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_sender="test@example.com")
 
     folder1 = folder_dict["Archive"]
     folder2 = folder_dict["Archive"]
 
     assert folder1 is not folder2  # Different instances
+
+
+# Story 3.14: default_sender validation tests
+
+
+def test_mailbox_auto_detects_email_username(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test Mailbox auto-detects smtp.username when it's a valid email."""
+    mock_smtp.username = "user@gmail.com"
+    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp)
+
+    assert mailbox._default_sender == "user@gmail.com"
+
+
+def test_mailbox_rejects_non_email_username(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test Mailbox raises ValueError when smtp.username is not email and no default_sender provided."""
+    mock_smtp.username = "john.smith"
+
+    with pytest.raises(ValueError, match="Cannot use SMTP username"):
+        Mailbox(imap=mock_imap, smtp=mock_smtp)
+
+
+def test_mailbox_accepts_valid_default_sender(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test Mailbox accepts explicit default_sender parameter."""
+    mock_smtp.username = "john.smith"
+    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="me@example.com")
+
+    assert mailbox._default_sender == "me@example.com"
+
+
+def test_mailbox_rejects_invalid_default_sender(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test Mailbox raises ValueError when default_sender is invalid."""
+    with pytest.raises(ValueError, match="Invalid default_sender"):
+        Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="invalid")

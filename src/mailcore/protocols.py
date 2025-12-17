@@ -344,6 +344,26 @@ class SMTPConnection(ABC):
         is the implementation's responsibility. Mailbox just uses the connection.
     """
 
+    @property
+    @abstractmethod
+    def username(self) -> str:
+        """Get SMTP authentication username.
+
+        Returns:
+            Username used for SMTP authentication. May be email address (user@gmail.com)
+            or account identifier (john.smith).
+
+        Note:
+            This property exposes the username for sender address resolution.
+            Mailbox uses this to auto-detect default_sender when not provided explicitly.
+
+        Example:
+            >>> smtp = AIOSMTPAdapter(username='user@gmail.com', ...)
+            >>> print(smtp.username)
+            'user@gmail.com'
+        """
+        ...
+
     @abstractmethod
     async def send_message(
         self,

@@ -43,6 +43,7 @@ class Draft:
     def __init__(
         self,
         smtp: SMTPConnection,
+        default_sender: str,
         *,
         reference_message: Message | None = None,
         in_reply_to: str | None = None,
@@ -54,6 +55,7 @@ class Draft:
 
         Args:
             smtp: SMTP connection for sending
+            default_sender: Default sender email address (REQUIRED)
             reference_message: Original message (for reply/forward)
             in_reply_to: Message-ID this replies to (for threading)
             references: Thread chain (list of Message-IDs)
@@ -66,6 +68,7 @@ class Draft:
         """
         # Connection
         self._smtp = smtp
+        self._default_sender = default_sender
 
         # Reference message for reply/forward
         self._reference_message = reference_message
@@ -75,6 +78,7 @@ class Draft:
         self._include_attachments = include_attachments
 
         # Builder state - mutable fields
+        self._from: str | None = None
         self._to: list[str] | None = None
         self._cc: list[str] | None = None
         self._bcc: list[str] | None = None
@@ -100,6 +104,21 @@ class Draft:
             self._to = [email]
         else:
             self._to = email
+        return self
+
+    def from_(self, email: str) -> "Draft":
+        """Set sender email (override default).
+
+        Args:
+            email: Sender email address
+
+        Returns:
+            Self for chaining
+
+        Example:
+            >>> draft.from_('alias@example.com').to('bob@example.com').send()
+        """
+        self._from = email
         return self
 
     def cc(self, email: str | list[str]) -> "Draft":
@@ -383,9 +402,9 @@ class Draft:
         cc_addrs = [parse_email(email) for email in self._cc] if self._cc else None
         bcc_addrs = [parse_email(email) for email in self._bcc] if self._bcc else None
 
-        # TODO: Get from_ address - for now use first to address as placeholder
-        # In real implementation, this should come from account config
-        from_addr_obj = to_addrs[0]  # Placeholder EmailAddress object
+        # Sender address: explicit override > default_sender (REQUIRED parameter)
+        from_email = self._from if self._from is not None else self._default_sender
+        from_addr_obj = parse_email(from_email)
 
         # Call SMTP connection
         result = await self._smtp.send_message(

@@ -101,6 +101,7 @@ class Message:
         self._references = references if references is not None else []
         self._attachments = attachments if attachments is not None else []
         self._smtp: SMTPConnection | None = None
+        self._default_sender: str | None = None
         self._body: MessageBody | None = None
 
     @property
@@ -388,6 +389,7 @@ class Message:
         # Create Draft with reply headers
         draft = Draft(
             smtp=self._smtp,
+            default_sender=self._default_sender or "",
             reference_message=self,
             in_reply_to=self._message_id,
             references=self._references + [self._message_id],
@@ -432,6 +434,7 @@ class Message:
         # Create Draft with reply headers
         draft = Draft(
             smtp=self._smtp,
+            default_sender=self._default_sender or "",
             reference_message=self,
             in_reply_to=self._message_id,
             references=self._references + [self._message_id],
@@ -483,6 +486,7 @@ class Message:
         # Create Draft with forward settings
         draft = Draft(
             smtp=self._smtp,
+            default_sender=self._default_sender or "",
             reference_message=self,
             include_attachments=include_attachments,
         )

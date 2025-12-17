@@ -19,12 +19,12 @@ def folder(mock_imap: AsyncMock, mock_smtp: AsyncMock) -> Folder:
 
     Uses centralized mock_imap and mock_smtp from conftest.py.
     """
-    return Folder(imap=mock_imap, smtp=mock_smtp, name="INBOX")
+    return Folder(imap=mock_imap, smtp=mock_smtp, name="INBOX", default_sender="test@example.com")
 
 
 def test_folder_initialization(mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify Folder constructor stores imap, smtp, name correctly."""
-    folder = Folder(imap=mock_imap, smtp=mock_smtp, name="INBOX")
+    folder = Folder(imap=mock_imap, smtp=mock_smtp, name="INBOX", default_sender="test@example.com")
     assert folder._imap is mock_imap
     assert folder._smtp is mock_smtp
     assert folder._name == "INBOX"

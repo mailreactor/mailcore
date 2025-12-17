@@ -40,17 +40,19 @@ class Folder:
         >>> reports = await alice_messages.subject('report').list()
     """
 
-    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection, name: str) -> None:
+    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection, name: str, default_sender: str) -> None:
         """Initialize folder with IMAP and SMTP connections.
 
         Args:
             imap: IMAP connection adapter
             smtp: SMTP connection adapter
             name: Folder name (e.g., "INBOX", "Sent")
+            default_sender: Default sender email address for message composition
         """
         self._imap = imap
         self._smtp = smtp
         self._name = name
+        self._default_sender = default_sender
         self._query_parts: list[Query] = []
 
     def _clone_with_query(self, query: Query) -> "Folder":
@@ -62,7 +64,7 @@ class Folder:
         Returns:
             New Folder instance with query added
         """
-        new_folder = Folder(self._imap, self._smtp, self._name)
+        new_folder = Folder(self._imap, self._smtp, self._name, self._default_sender)
         new_folder._query_parts = self._query_parts.copy()
         new_folder._query_parts.append(query)
         return new_folder
@@ -191,9 +193,10 @@ class Folder:
         # Execute query via IMAP (query is already a Query instance)
         message_list = await self._imap.query_messages(self._name, query, limit=limit, offset=offset)
 
-        # Inject SMTP into all messages
+        # Inject SMTP and default_sender into all messages
         for msg in message_list:
             msg._smtp = self._smtp
+            msg._default_sender = self._default_sender
 
         return message_list
 

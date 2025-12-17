@@ -115,6 +115,11 @@ async def test_complete_smtp_implementation_succeeds() -> None:
     class CompleteSMTPAdapter(SMTPConnection):
         """Complete adapter implementing send_message."""
 
+        @property
+        def username(self) -> str:
+            """Get SMTP authentication username."""
+            return "test@example.com"
+
         async def send_message(
             self,
             from_: EmailAddress,
