@@ -11,7 +11,7 @@ from mailcore.protocols import SMTPConnection
 class Draft:
     """Outgoing message builder with fluent interface.
 
-    Returned by `mailbox.compose()`, `message.reply()`, `message.forward()`.
+    Returned by `mailbox.draft()`, `message.reply()`, `message.forward()`.
     All builder methods return self for chaining.
 
     Builder behavior:
@@ -27,11 +27,11 @@ class Draft:
         include_attachments: Include original attachments (for forward - fetched during send())
 
     Note:
-        Not typically instantiated directly - use mailbox.compose(),
+        Not typically instantiated directly - use mailbox.draft(),
         message.reply(), or message.forward()
 
     Example:
-        >>> # Created by mailbox.compose()
+        >>> # Created by mailbox.draft()
         >>> draft = Draft(smtp=smtp_connection, default_sender='me@example.com')
         >>> draft.to('alice@example.com').subject('Hi').body('Hello')
         >>> draft  # REPL-friendly repr
@@ -66,7 +66,7 @@ class Draft:
             include_attachments: Include original attachments (for forward - used during send())
 
         Note:
-            Not typically instantiated directly - use mailbox.compose(),
+            Not typically instantiated directly - use mailbox.draft(),
             message.reply(), or message.forward()
         """
         # Connection
@@ -333,7 +333,7 @@ class Draft:
             >>> # Works on any draft source
             >>> await message.reply().send(body='Thanks!', cc='team@example.com')
             >>> await message.forward().send(to='colleague@example.com', body='FYI')
-            >>> await mailbox.compose().send(to='alice@example.com', subject='Hi', body='Hello')
+            >>> await mailbox.draft().send(to='alice@example.com', subject='Hi', body='Hello')
         """
         # Apply kwargs via builder methods
         for key, value in kwargs.items():

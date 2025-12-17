@@ -89,9 +89,9 @@ def create_test_attachment(filename: str, content: bytes, content_type: str = "a
 
 @pytest.mark.asyncio
 async def test_e2e_send_email_plain_text(mailbox, smtp):
-    """E2E: Send plain text email via mailbox.compose()."""
+    """E2E: Send plain text email via mailbox.draft()."""
     # Compose and send
-    message_id = await mailbox.compose().to("alice@example.com").subject("Test Email").body("Hello World").send()
+    message_id = await mailbox.draft().to("alice@example.com").subject("Test Email").body("Hello World").send()
 
     # Verify sent via mock SMTP
     assert len(smtp._sent_messages) == 1
@@ -111,7 +111,7 @@ async def test_e2e_send_email_plain_text(mailbox, smtp):
 async def test_e2e_send_email_with_html(mailbox, smtp):
     """E2E: Send email with both plain text and HTML body."""
     message_id = (
-        await mailbox.compose()
+        await mailbox.draft()
         .to("bob@example.com")
         .subject("HTML Email")
         .body("Plain text version")
@@ -139,7 +139,7 @@ async def test_e2e_send_email_with_attachments(mailbox, smtp):
 
     # Send with attachments
     await (
-        mailbox.compose()
+        mailbox.draft()
         .to("carol@example.com")
         .subject("Report")
         .body("See attachments")

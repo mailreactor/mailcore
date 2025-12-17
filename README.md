@@ -105,7 +105,7 @@ All mailcore domain objects provide informative `repr()` output for easy debuggi
 >>> messages
 MessageList(returned=10, total_matches=73, total_in_folder=1542, folder='INBOX')
 
->>> draft = mailbox.compose().to('alice@example.com').subject('Hello')
+>>> draft = mailbox.draft().to('alice@example.com').subject('Hello')
 >>> draft
 Draft(to=['alice@example.com'], subject='Hello', body=False, attachments=0)
 

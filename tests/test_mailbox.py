@@ -194,7 +194,7 @@ async def test_send_with_all_parameters(mailbox: Mailbox, mock_smtp: SMTPConnect
 # Test: compose returns Draft with SMTP
 def test_compose_returns_draft_with_smtp(mailbox: Mailbox, mock_smtp: SMTPConnection) -> None:
     """Test compose() returns Draft with SMTP connection."""
-    draft = mailbox.compose()
+    draft = mailbox.draft()
 
     assert isinstance(draft, Draft)
     assert draft._smtp is mock_smtp

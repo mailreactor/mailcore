@@ -109,7 +109,7 @@ class Mailbox:
         >>> compose_folder = mailbox.folders['Compose']  # No collision!
         >>>
         >>> # Tier 3: Methods (don't collide with folder names)
-        >>> draft = mailbox.compose()
+        >>> draft = mailbox.draft()
         >>> await mailbox.send(to='alice@example.com', subject='Hi', body='Hello')
     """
 
@@ -203,14 +203,14 @@ class Mailbox:
         """
         return self._folders
 
-    def compose(self) -> Draft:
+    def draft(self) -> Draft:
         """Create new draft message.
 
         Returns:
             Draft with SMTP connection for building and sending email
 
         Example:
-            >>> draft = mailbox.compose()
+            >>> draft = mailbox.draft()
             >>> await draft.to('alice@example.com').subject('Hi').body('Hello').send()
         """
         return Draft(smtp=self._smtp, default_sender=self._default_sender)
@@ -249,7 +249,7 @@ class Mailbox:
             ... )
         """
         # Create draft and apply fields
-        draft = self.compose()
+        draft = self.draft()
         draft.to(to)
         draft.subject(subject)
 
