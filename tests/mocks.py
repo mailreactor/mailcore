@@ -15,11 +15,9 @@ from typing import Any
 
 from mailcore.attachment import Attachment, IMAPResolver
 from mailcore.email_address import EmailAddress
-from mailcore.message import Message
-from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.query import Query
-from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import FolderInfo, FolderStatus, MessageData, MessageFlag, MessageListData, SendResult
 
 
 @dataclass
@@ -75,11 +73,11 @@ class MockIMAPConnection(IMAPConnection):
         include_attachment_metadata: bool = True,
         limit: int | None = None,
         offset: int = 0,
-    ) -> MessageList:
-        """Query messages from folder matching criteria."""
+    ) -> MessageListData:
+        """Query messages from folder matching criteria - returns DTOs."""
         async with self._lock:
             if folder not in self._folders:
-                return MessageList([], 0, 0, folder)
+                return MessageListData(messages=[], total_matches=0, total_in_folder=0, folder=folder)
 
             all_messages = self._folders[folder]
 
@@ -93,8 +91,8 @@ class MockIMAPConnection(IMAPConnection):
             # Apply pagination
             paginated = filtered[offset : offset + limit] if limit else filtered[offset:]
 
-            # Convert to Message domain objects
-            messages = []
+            # Convert to MessageData DTOs (pure data, no connections)
+            message_data_list = []
             for mock_msg in paginated:
                 # Create attachment metadata if requested
                 attachments = []
@@ -110,8 +108,7 @@ class MockIMAPConnection(IMAPConnection):
                         )
                         attachments.append(att)
 
-                msg = Message(
-                    imap=self,
+                data = MessageData(
                     uid=mock_msg.uid,
                     folder=folder,
                     message_id=mock_msg.message_id,
@@ -128,9 +125,14 @@ class MockIMAPConnection(IMAPConnection):
                     attachments=attachments,
                 )
 
-                messages.append(msg)
+                message_data_list.append(data)
 
-            return MessageList(messages, total_matches, total_in_folder, folder)
+            return MessageListData(
+                messages=message_data_list,
+                total_matches=total_matches,
+                total_in_folder=total_in_folder,
+                folder=folder,
+            )
 
     def _filter_messages(self, messages: list[MockMessage], criteria: list[str]) -> list[MockMessage]:
         """Filter messages by IMAP criteria."""

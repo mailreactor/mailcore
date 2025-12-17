@@ -176,15 +176,15 @@ class Folder:
     async def list(self, limit: int | None = None, offset: int = 0) -> MessageList:
         """Execute query and return messages.
 
-        Combines accumulated query parts with AND logic, executes via IMAP,
-        and injects SMTP connection into returned messages.
+        Combines accumulated query parts with AND logic, executes via IMAP (returns DTOs),
+        converts DTOs to Message entities with both IMAP and SMTP injected.
 
         Args:
             limit: Maximum messages to return (None = unlimited)
             offset: Skip first N messages (for pagination)
 
         Returns:
-            MessageList with SMTP injected into each message
+            MessageList with Message entities (IMAP and SMTP injected)
         """
         # Build query from accumulated parts
         if not self._query_parts:
@@ -194,15 +194,21 @@ class Folder:
             for q in self._query_parts[1:]:
                 query = query & q
 
-        # Execute query via IMAP (query is already a Query instance)
-        message_list = await self._imap.query_messages(self._name, query, limit=limit, offset=offset)
+        # Execute query via IMAP - returns MessageListData (DTO)
+        data = await self._imap.query_messages(self._name, query, limit=limit, offset=offset)
 
-        # Inject SMTP and default_sender into all messages
-        for msg in message_list:
-            msg._smtp = self._smtp
-            msg._default_sender = self._default_sender
+        # Convert MessageData DTOs to Message entities
+        messages = [
+            Message.from_data(msg_data, self._imap, self._smtp, self._default_sender) for msg_data in data.messages
+        ]
 
-        return message_list
+        # Create MessageList with entities
+        return MessageList(
+            messages=messages,
+            total_matches=data.total_matches,
+            total_in_folder=data.total_in_folder,
+            folder=data.folder,
+        )
 
     async def __aiter__(self) -> AsyncIterator[Message]:
         """Async iteration - stream all matching messages (no limit).

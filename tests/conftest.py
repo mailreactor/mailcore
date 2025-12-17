@@ -21,9 +21,8 @@ import pytest
 
 from mailcore.email_address import EmailAddress
 from mailcore.message import Message
-from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import FolderInfo, FolderStatus, MessageData, MessageFlag, MessageListData, SendResult
 
 # pytest-asyncio configuration is handled in pyproject.toml [tool.pytest.ini_options]
 
@@ -35,7 +34,7 @@ def mock_imap():
     Returns AsyncMock(spec=IMAPConnection) with sensible defaults for unit tests.
 
     Pre-configured return values:
-    - query_messages: Empty MessageList
+    - query_messages: Empty MessageListData (DTO)
     - fetch_message_body: ("Plain text body", "<p>HTML body</p>")
     - fetch_attachment_content: b"attachment content"
     - update_message_flags: ({MessageFlag.SEEN}, set())
@@ -58,8 +57,11 @@ def mock_imap():
             folder = Folder(imap=mock_imap, smtp=None, name="INBOX")
 
             # Override for this specific test
-            mock_imap.query_messages.return_value = MessageList(
-                [create_test_message()], 1, 100, "INBOX"
+            mock_imap.query_messages.return_value = MessageListData(
+                messages=[create_test_message_data()],
+                total_matches=1,
+                total_in_folder=100,
+                folder="INBOX"
             )
 
             messages = await folder.list()
@@ -68,7 +70,7 @@ def mock_imap():
     mock = AsyncMock(spec=IMAPConnection)
 
     # Pre-configure all 12 ABC methods with sensible defaults
-    mock.query_messages.return_value = MessageList([], 0, 0, "INBOX")
+    mock.query_messages.return_value = MessageListData(messages=[], total_matches=0, total_in_folder=0, folder="INBOX")
     mock.fetch_message_body.return_value = ("Plain text body", "<p>HTML body</p>")
     mock.fetch_attachment_content.return_value = b"attachment content"
     mock.update_message_flags.return_value = ({MessageFlag.SEEN}, set())
@@ -185,6 +187,8 @@ def create_mock_message(
 
     return Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=uid,
         folder=folder,
         message_id=message_id,
@@ -195,4 +199,44 @@ def create_mock_message(
         date=datetime.now(timezone.utc),
         flags=set(),
         size=100,
+    )
+
+
+def create_message_data(
+    uid: int = 1,
+    folder: str = "INBOX",
+    message_id: str | None = None,
+    subject: str = "Test",
+    from_email: str = "sender@example.com",
+) -> MessageData:
+    """Helper to create a MessageData DTO for testing.
+
+    Args:
+        uid: Message UID
+        folder: Folder name
+        message_id: Message ID (auto-generated if None)
+        subject: Subject line
+        from_email: Sender email
+
+    Returns:
+        MessageData DTO for testing
+    """
+    if message_id is None:
+        message_id = f"<msg-{uid}@example.com>"
+
+    return MessageData(
+        uid=uid,
+        folder=folder,
+        message_id=message_id,
+        from_=EmailAddress(from_email),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject=subject,
+        date=datetime.now(timezone.utc),
+        flags=set(),
+        size=100,
+        custom_flags=set(),
+        in_reply_to=None,
+        references=[],
+        attachments=[],
     )

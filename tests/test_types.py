@@ -1,7 +1,17 @@
 """Tests for domain types in types.py."""
 
+from datetime import datetime
+
+from mailcore.attachment import Attachment
 from mailcore.email_address import EmailAddress
-from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import (
+    FolderInfo,
+    FolderStatus,
+    MessageData,
+    MessageFlag,
+    MessageListData,
+    SendResult,
+)
 
 
 def test_email_address_to_rfc5322_with_name() -> None:
@@ -84,3 +94,134 @@ def test_send_result_dataclass() -> None:
     assert result.accepted[0] == "alice@example.com"
     assert len(result.rejected) == 1
     assert result.rejected["invalid@domain.com"] == (550, "No such user")
+
+
+def test_message_data_creation_with_all_fields() -> None:
+    """Verify MessageData creation with all 14 fields."""
+    now = datetime(2025, 12, 17, 10, 30, 0)
+    data = MessageData(
+        uid=42,
+        folder="INBOX",
+        message_id="<test@example.com>",
+        from_=EmailAddress("alice@example.com", "Alice"),
+        to=[EmailAddress("bob@example.com", "Bob")],
+        cc=[EmailAddress("charlie@example.com")],
+        subject="Test Subject",
+        date=now,
+        flags={MessageFlag.SEEN, MessageFlag.FLAGGED},
+        size=1024,
+        custom_flags={"$Forwarded", "$MDNSent"},
+        in_reply_to="<original@example.com>",
+        references=["<ref1@example.com>", "<ref2@example.com>"],
+        attachments=[Attachment.from_bytes(b"test", "test.txt", "text/plain")],
+    )
+
+    assert data.uid == 42
+    assert data.folder == "INBOX"
+    assert data.message_id == "<test@example.com>"
+    assert data.from_.email == "alice@example.com"
+    assert len(data.to) == 1
+    assert len(data.cc) == 1
+    assert data.subject == "Test Subject"
+    assert data.date == now
+    assert MessageFlag.SEEN in data.flags
+    assert MessageFlag.FLAGGED in data.flags
+    assert data.size == 1024
+    assert "$Forwarded" in data.custom_flags
+    assert data.in_reply_to == "<original@example.com>"
+    assert len(data.references) == 2
+    assert len(data.attachments) == 1
+
+
+def test_message_data_is_pure_dataclass() -> None:
+    """Verify MessageData is pure dataclass with no methods beyond __init__."""
+    data = MessageData(
+        uid=1,
+        folder="INBOX",
+        message_id="<test@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[],
+        cc=[],
+        subject="Test",
+        date=datetime.now(),
+        flags=set(),
+        size=100,
+        custom_flags=set(),
+        in_reply_to=None,
+        references=[],
+        attachments=[],
+    )
+
+    # Verify it's a dataclass
+    assert hasattr(data, "__dataclass_fields__")
+
+    # Verify no custom methods (only dunder methods from dataclass)
+    custom_methods = [m for m in dir(data) if callable(getattr(data, m)) and not m.startswith("_")]
+    assert len(custom_methods) == 0, f"Found custom methods: {custom_methods}"
+
+
+def test_message_list_data_creation() -> None:
+    """Verify MessageListData creation with 4 fields."""
+    msg1 = MessageData(
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags={MessageFlag.SEEN},
+        size=512,
+        custom_flags=set(),
+        in_reply_to=None,
+        references=[],
+        attachments=[],
+    )
+    msg2 = MessageData(
+        uid=2,
+        folder="INBOX",
+        message_id="<msg2@example.com>",
+        from_=EmailAddress("charlie@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Message 2",
+        date=datetime.now(),
+        flags=set(),
+        size=768,
+        custom_flags=set(),
+        in_reply_to=None,
+        references=[],
+        attachments=[],
+    )
+
+    list_data = MessageListData(
+        messages=[msg1, msg2],
+        total_matches=2,
+        total_in_folder=100,
+        folder="INBOX",
+    )
+
+    assert len(list_data.messages) == 2
+    assert list_data.total_matches == 2
+    assert list_data.total_in_folder == 100
+    assert list_data.folder == "INBOX"
+    assert list_data.messages[0].uid == 1
+    assert list_data.messages[1].uid == 2
+
+
+def test_message_list_data_is_pure_dataclass() -> None:
+    """Verify MessageListData is pure dataclass with no methods."""
+    list_data = MessageListData(
+        messages=[],
+        total_matches=0,
+        total_in_folder=0,
+        folder="INBOX",
+    )
+
+    # Verify it's a dataclass
+    assert hasattr(list_data, "__dataclass_fields__")
+
+    # Verify no custom methods
+    custom_methods = [m for m in dir(list_data) if callable(getattr(list_data, m)) and not m.startswith("_")]
+    assert len(custom_methods) == 0, f"Found custom methods: {custom_methods}"

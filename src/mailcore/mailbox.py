@@ -472,15 +472,13 @@ class Mailbox:
 
             query = Query.all()
             try:
-                message_list = await self._imap.query_messages(folder=folder_name, query=query, limit=None)
+                list_data = await self._imap.query_messages(folder=folder_name, query=query, limit=None)
 
-                # Search for matching message_id
-                message: Message
-                for message in message_list:
-                    if message.message_id == message_id:
-                        # Inject SMTP and return
-                        message._smtp = self._smtp
-                        return message
+                # Search for matching message_id in DTOs, convert to entity if found
+                for msg_data in list_data.messages:
+                    if msg_data.message_id == message_id:
+                        # Convert DTO to entity with connections
+                        return Message.from_data(msg_data, self._imap, self._smtp, self._default_sender)
             except Exception:
                 # Folder might not exist or be accessible, continue to next
                 continue

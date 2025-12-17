@@ -13,7 +13,7 @@ from mailcore.attachment import Attachment
 from mailcore.body import MessageBody
 from mailcore.email_address import EmailAddress
 from mailcore.message import Message
-from mailcore.types import MessageFlag
+from mailcore.types import MessageData, MessageFlag
 
 
 @pytest.fixture
@@ -24,6 +24,8 @@ def sample_message(mock_imap):
     """
     return Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<msg-123@example.com>",
@@ -82,6 +84,8 @@ def test_message_is_reply_computed(mock_imap):
     # Message with in_reply_to
     reply_msg = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -99,6 +103,8 @@ def test_message_is_reply_computed(mock_imap):
     # Message without in_reply_to
     new_msg = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=2,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -241,6 +247,8 @@ def test_message_accepts_attachments_parameter(mock_imap):
 
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -271,6 +279,8 @@ def test_message_attachments_property(mock_imap):
 
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -309,6 +319,8 @@ def test_message_has_attachments_computed(mock_imap):
     # Message with both
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -327,6 +339,8 @@ def test_message_has_attachments_computed(mock_imap):
     # Message with only inline attachments
     message_inline_only = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=43,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -351,6 +365,8 @@ def test_message_attachment_count(mock_imap):
 
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -375,6 +391,8 @@ def test_message_inline_count(mock_imap):
 
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -398,6 +416,8 @@ def test_message_reply_creates_draft(mock_imap, mock_smtp):
     """Test reply() creates Draft with correct fields."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -425,6 +445,8 @@ def test_message_reply_sets_in_reply_to(mock_imap, mock_smtp):
     """Test reply() sets in_reply_to = message_id."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -447,6 +469,8 @@ def test_message_reply_sets_references(mock_imap, mock_smtp):
     """Test reply() includes original message_id in references."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -470,6 +494,8 @@ def test_message_reply_prefixes_subject(mock_imap, mock_smtp):
     """Test reply() adds 'Re:' prefix to subject."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -490,6 +516,8 @@ def test_message_reply_prefixes_subject(mock_imap, mock_smtp):
     # Test it doesn't duplicate Re:
     message2 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=43,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -511,6 +539,8 @@ def test_message_reply_requires_smtp(mock_imap):
     """Test reply() raises ValueError if _smtp is None."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -532,6 +562,8 @@ def test_message_reply_all_includes_all_recipients(mock_imap, mock_smtp):
     """Test reply_all() includes all original recipients in to + cc."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -563,6 +595,8 @@ def test_message_forward_creates_draft(mock_imap, mock_smtp):
     """Test forward() creates Draft with correct fields."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -588,6 +622,8 @@ def test_message_forward_prefixes_subject(mock_imap, mock_smtp):
     """Test forward() adds 'Fwd:' prefix to subject."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -608,6 +644,8 @@ def test_message_forward_prefixes_subject(mock_imap, mock_smtp):
     # Test it doesn't duplicate Fwd:
     message2 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=43,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -629,6 +667,8 @@ def test_message_forward_requires_smtp(mock_imap):
     """Test forward() raises ValueError if _smtp is None."""
     message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -644,3 +684,95 @@ def test_message_forward_requires_smtp(mock_imap):
 
     with pytest.raises(ValueError, match="SMTP connection not available"):
         message.forward()
+
+
+def test_message_from_data_creates_entity(mock_imap, mock_smtp):
+    """Test Message.from_data() converts DTO to entity."""
+    data = MessageData(
+        uid=99,
+        folder="Sent",
+        message_id="<data-test@example.com>",
+        from_=EmailAddress("sender@example.com", "Sender Name"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[EmailAddress("cc@example.com")],
+        subject="Data Test",
+        date=datetime(2025, 12, 17, 14, 0, tzinfo=timezone.utc),
+        flags={MessageFlag.SEEN, MessageFlag.ANSWERED},
+        size=2048,
+        custom_flags={"$Forwarded"},
+        in_reply_to="<reply-to@example.com>",
+        references=["<ref1@example.com>"],
+        attachments=[Attachment.from_bytes(b"test", "test.txt", "text/plain")],
+    )
+
+    message = Message.from_data(data, mock_imap, mock_smtp, "default@example.com")
+
+    # Verify all fields copied from DTO
+    assert message.uid == 99
+    assert message.folder == "Sent"
+    assert message.message_id == "<data-test@example.com>"
+    assert message.from_.email == "sender@example.com"
+    assert len(message.to) == 1
+    assert message.to[0].email == "recipient@example.com"
+    assert len(message.cc) == 1
+    assert message.subject == "Data Test"
+    assert message.date == datetime(2025, 12, 17, 14, 0, tzinfo=timezone.utc)
+    assert MessageFlag.SEEN in message.flags
+    assert MessageFlag.ANSWERED in message.flags
+    assert message.size == 2048
+    assert "$Forwarded" in message.custom_flags
+    assert message.in_reply_to == "<reply-to@example.com>"
+    assert len(message.references) == 1
+    assert len(message.attachments) == 1
+
+
+def test_message_from_data_injects_imap_and_smtp(mock_imap, mock_smtp):
+    """Test Message.from_data() injects both IMAP and SMTP."""
+    data = MessageData(
+        uid=1,
+        folder="INBOX",
+        message_id="<test@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=set(),
+        size=100,
+        custom_flags=set(),
+        in_reply_to=None,
+        references=[],
+        attachments=[],
+    )
+
+    message = Message.from_data(data, mock_imap, mock_smtp, "me@example.com")
+
+    assert message._imap is mock_imap
+    assert message._smtp is mock_smtp
+    assert message._default_sender == "me@example.com"
+
+
+def test_message_from_data_smtp_not_none(mock_imap, mock_smtp):
+    """Test Message.from_data() creates message with SMTP immediately available."""
+    data = MessageData(
+        uid=1,
+        folder="INBOX",
+        message_id="<test@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=set(),
+        size=100,
+        custom_flags=set(),
+        in_reply_to=None,
+        references=[],
+        attachments=[],
+    )
+
+    message = Message.from_data(data, mock_imap, mock_smtp, "me@example.com")
+
+    # Should be able to call reply() immediately (no ValueError)
+    draft = message.reply()
+    assert draft is not None

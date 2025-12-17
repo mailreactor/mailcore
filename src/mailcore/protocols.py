@@ -10,9 +10,8 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from mailcore.email_address import EmailAddress
-from mailcore.message_list import MessageList
 from mailcore.query import Query
-from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import FolderInfo, FolderStatus, MessageFlag, MessageListData, SendResult
 
 
 class IMAPConnection(ABC):
@@ -21,19 +20,18 @@ class IMAPConnection(ABC):
     All methods are stateless - folder is specified per operation.
     Adapter orchestrates low-level IMAP protocol (SELECT, SEARCH, FETCH, etc.).
 
-    Adapter creates and returns domain objects (Message, MessageList) directly.
-    Messages have IMAP injected at creation (Message._imap = self).
-    SMTP is injected later by Folder (lazy injection pattern).
-    No intermediate DTOs - clean domain object flow throughout.
+    Adapter returns DTOs (MessageListData) - domain converts to entities.
+    Separates data (what adapters return) from behavior (what domain adds).
 
     Note:
         Connection management (connect, disconnect, pooling, reconnection)
         is the implementation's responsibility. Mailbox just uses the connection.
 
-        SMTP Injection Pattern:
-        - Adapter creates Messages with _imap=self, _smtp=None
-        - Returns MessageList with pagination metadata
-        - Folder receives MessageList, injects _smtp into each Message
+        DTO Pattern (Story 3.21):
+        - Adapter creates MessageData DTOs (pure data, no behavior)
+        - Returns MessageListData with pagination metadata
+        - Folder receives DTOs, converts to Message entities via Message.from_data()
+        - Folder injects BOTH imap AND smtp at creation (no lazy injection)
         - Messages returned to user have both IMAP and SMTP
     """
 
@@ -46,14 +44,14 @@ class IMAPConnection(ABC):
         include_attachment_metadata: bool = True,
         limit: int | None = None,
         offset: int = 0,
-    ) -> MessageList:
+    ) -> MessageListData:
         """Query messages from folder matching criteria.
 
         Combines IMAP operations: SELECT + SEARCH + FETCH + STATUS
-        Creates Message domain objects with IMAP connection injected (Message._imap = self).
-        Returns MessageList with pagination metadata.
+        Creates MessageData DTOs (pure data, no behavior).
+        Returns MessageListData with pagination metadata.
 
-        SMTP is NOT injected here - that's done by Folder after receiving MessageList.
+        Adapter returns DTOs - Folder converts to Message entities with behavior.
 
         Args:
             folder: Folder name
@@ -66,20 +64,21 @@ class IMAPConnection(ABC):
             offset: Skip first N messages (for pagination)
 
         Returns:
-            MessageList with:
-                - messages: List of Message domain objects (with _imap=self, _smtp=None)
+            MessageListData with:
+                - messages: List of MessageData DTOs (pure data)
                 - total_matches: Total messages matching query (before limit)
                 - total_in_folder: Total messages in folder (unfiltered)
                 - folder: Folder name
 
-            Message metadata always includes: Message-ID, From, To, CC, Subject, Date, Flags, Size
-            Conditionally includes: body_text, body_html, attachment_metadata
-            Message._imap is set to self (the adapter) for lazy loading.
+            MessageData always includes: uid, folder, message_id, from_, to, cc, subject, date,
+                                         flags, size
+            Conditionally includes: body text/html (if include_body=True),
+                                    attachments (if include_attachment_metadata=True)
 
         Note:
             Adapter decides HOW to fetch efficiently based on what's requested.
-            Adapter creates Message objects with imap=self for lazy loading.
-            Message can call self._imap.fetch_message_body() later if needed.
+            Adapter returns DTOs - no behavior, just data.
+            Folder converts DTOs to Message entities with Message.from_data(dto, imap, smtp).
             Core domain uses domain language (include_body), not IMAP concepts (FETCH BODY[TEXT]).
 
         Example:
@@ -88,7 +87,7 @@ class IMAPConnection(ABC):
             # Build query using Q builder
             query = Q.from_('alice@example.com') & Q.unseen()
 
-            messages = await imap.query_messages(
+            data = await imap.query_messages(
                 'INBOX',
                 query,
                 include_body=False,                # Don't fetch body yet
@@ -96,8 +95,8 @@ class IMAPConnection(ABC):
                 limit=50
             )
 
-            # Messages can lazy load:
-            body = await messages[0].body.get_text()  # Calls self._imap.fetch_message_body()
+            # Returns MessageListData with MessageData DTOs
+            # Folder converts to Message entities with behavior
         """
         ...
 

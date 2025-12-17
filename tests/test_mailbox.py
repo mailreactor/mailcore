@@ -207,6 +207,8 @@ async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     # Create messages from different folders
     msg1 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -220,6 +222,8 @@ async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     )
     msg2 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=2,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -233,6 +237,8 @@ async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     )
     msg3 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=10,
         folder="Archive",
         message_id="<msg3@example.com>",
@@ -259,6 +265,8 @@ async def test_move_accepts_message_list(mailbox: Mailbox, mock_imap: IMAPConnec
     """Test move(MessageList) works."""
     msg1 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -289,6 +297,8 @@ async def test_copy_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     """Test copy() groups messages by folder and calls imap.copy_message()."""
     msg1 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -312,6 +322,8 @@ async def test_delete_non_permanent_moves_to_trash(mailbox: Mailbox, mock_imap: 
     """Test delete(permanent=False) moves to Trash."""
     msg1 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -336,6 +348,8 @@ async def test_delete_permanent_calls_delete_message(mailbox: Mailbox, mock_imap
     """Test delete(permanent=True) calls imap.delete_message()."""
     msg1 = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -369,6 +383,8 @@ async def test_get_searches_all_folders_for_message(
     # Mock query_messages to return empty for INBOX, message for Sent
     target_message = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="Sent",
         message_id="<msg-123@example.com>",

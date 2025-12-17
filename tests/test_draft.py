@@ -25,6 +25,8 @@ def mock_message(mock_smtp):
     mock_imap = Mock()
     msg = Message(
         imap=mock_imap,
+        smtp=None,
+        default_sender=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",

@@ -7,7 +7,7 @@ from mailcore.attachment import Attachment
 from mailcore.body import MessageBody
 from mailcore.email_address import EmailAddress
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import MessageFlag
+from mailcore.types import MessageData, MessageFlag
 
 if TYPE_CHECKING:
     from mailcore.draft import Draft
@@ -19,46 +19,29 @@ class Message:
     Metadata is always available (from IMAP SEARCH + BODYSTRUCTURE). Body content
     is fetched on-demand when accessed via the body property.
 
-    Message receives IMAP connection at creation, SMTP is injected later by Folder
-    after IMAP query completes.
-
-    Args:
-        imap: IMAP connection for operations (mark_read, move_to, etc.)
-        uid: IMAP UID (folder-specific)
-        folder: Folder name this message belongs to
-        message_id: RFC 5322 Message-ID (globally unique)
-        from_: Sender
-        to: Recipients
-        cc: CC recipients
-        subject: Subject line
-        date: Message date
-        flags: Standard IMAP flags (MessageFlag enum)
-        size: Message size in bytes
-        custom_flags: Custom IMAP keywords (e.g., $Forwarded, $MDNSent)
-        in_reply_to: Message-ID this replies to (for threading)
-        references: Thread chain (list of Message-IDs)
-        attachments: List of attachments (metadata from BODYSTRUCTURE)
+    Message receives both IMAP and SMTP connections at creation. Use Message.from_data()
+    factory method to create from adapter DTOs.
 
     Note:
-        Not typically instantiated directly - created during folder queries.
-
-        Message._smtp is None at creation, injected by Folder.list() to enable
-        compose operations (reply, forward).
+        Prefer Message.from_data() factory for production code (converts DTOs to entities).
+        Direct instantiation via __init__ is mainly for testing.
 
     Example:
-        >>> # Created by IMAP adapter
+        >>> # Created directly (e.g., in tests)
         >>> message = Message(
         ...     imap=mock_imap,
+        ...     smtp=mock_smtp,
+        ...     default_sender='me@example.com',
         ...     uid=42,
         ...     folder='INBOX',
         ...     message_id='<msg-123@example.com>',
         ...     from_=EmailAddress('alice@example.com', 'Alice Smith'),
         ...     to=[EmailAddress('bob@example.com')],
         ...     cc=[],
-         ...     subject='Test Subject',
-         ...     date=datetime.now(),
-         ...     flags={MessageFlag.SEEN},
-         ...     size=1024
+        ...     subject='Test Subject',
+        ...     date=datetime.now(),
+        ...     flags={MessageFlag.SEEN},
+        ...     size=1024
         ... )
         >>> # Access metadata (no network call)
         >>> print(message.subject)  # 'Test Subject'
@@ -69,6 +52,8 @@ class Message:
     def __init__(
         self,
         imap: IMAPConnection,
+        smtp: SMTPConnection | None,
+        default_sender: str | None,
         uid: int,
         folder: str,
         message_id: str,
@@ -84,8 +69,30 @@ class Message:
         references: list[str] | None = None,
         attachments: list[Attachment] | None = None,
     ) -> None:
-        """Initialize message with metadata and IMAP connection."""
+        """Initialize message with metadata and connections.
+
+        Args:
+            imap: IMAP connection for operations (mark_read, move_to, etc.)
+            smtp: SMTP connection for compose operations (reply, forward) - None if not available
+            default_sender: Default sender email for compose operations - None if not available
+            uid: IMAP UID (folder-specific)
+            folder: Folder name this message belongs to
+            message_id: RFC 5322 Message-ID (globally unique)
+            from_: Sender
+            to: Recipients
+            cc: CC recipients
+            subject: Subject line
+            date: Message date
+            flags: Standard IMAP flags (MessageFlag enum)
+            size: Message size in bytes
+            custom_flags: Custom IMAP keywords (e.g., $Forwarded, $MDNSent)
+            in_reply_to: Message-ID this replies to (for threading)
+            references: Thread chain (list of Message-IDs)
+            attachments: List of attachments (metadata from BODYSTRUCTURE)
+        """
         self._imap = imap
+        self._smtp = smtp
+        self._default_sender = default_sender
         self._uid = uid
         self._folder = folder
         self._message_id = message_id
@@ -100,9 +107,74 @@ class Message:
         self._in_reply_to = in_reply_to
         self._references = references if references is not None else []
         self._attachments = attachments if attachments is not None else []
-        self._smtp: SMTPConnection | None = None
-        self._default_sender: str | None = None
         self._body: MessageBody | None = None
+
+    @classmethod
+    def from_data(
+        cls,
+        data: MessageData,
+        imap: IMAPConnection,
+        smtp: SMTPConnection,
+        default_sender: str,
+    ) -> "Message":
+        """Create Message entity from MessageData DTO.
+
+        Factory method that converts adapter DTOs to domain entities.
+        Injects BOTH imap and smtp at creation (no lazy injection).
+
+        Args:
+            data: MessageData DTO from adapter
+            imap: IMAP connection for operations
+            smtp: SMTP connection for compose operations
+            default_sender: Default sender email (from Mailbox)
+
+        Returns:
+            Message entity with both IMAP and SMTP injected
+
+        Example:
+            >>> from mailcore import MessageData, EmailAddress, MessageFlag
+            >>> from datetime import datetime
+            >>> data = MessageData(
+            ...     uid=42,
+            ...     folder='INBOX',
+            ...     message_id='<test@example.com>',
+            ...     from_=EmailAddress('alice@example.com'),
+            ...     to=[EmailAddress('bob@example.com')],
+            ...     cc=[],
+            ...     subject='Test',
+            ...     date=datetime.now(),
+            ...     flags={MessageFlag.SEEN},
+            ...     size=1024,
+            ...     custom_flags=set(),
+            ...     in_reply_to=None,
+            ...     references=[],
+            ...     attachments=[]
+            ... )
+            >>> message = Message.from_data(data, mock_imap, mock_smtp, 'me@example.com')
+            >>> message.uid
+            42
+            >>> message._smtp is not None
+            True
+        """
+        return cls(
+            imap=imap,
+            smtp=smtp,
+            default_sender=default_sender,
+            uid=data.uid,
+            folder=data.folder,
+            message_id=data.message_id,
+            from_=data.from_,
+            to=data.to,
+            cc=data.cc,
+            subject=data.subject,
+            date=data.date,
+            flags=data.flags,
+            size=data.size,
+            custom_flags=data.custom_flags,
+            in_reply_to=data.in_reply_to,
+            references=data.references,
+            attachments=data.attachments,
+        )
 
     @property
     def uid(self) -> int:

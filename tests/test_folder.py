@@ -7,10 +7,11 @@ Eliminated 2 duplicate fixtures (mock_imap, mock_smtp).
 from unittest.mock import AsyncMock
 
 import pytest
-from conftest import create_mock_message
+from conftest import create_message_data
 
 from mailcore.folder import Folder
 from mailcore.message_list import MessageList
+from mailcore.types import MessageListData
 
 
 @pytest.fixture
@@ -68,14 +69,14 @@ def test_folder_builds_query_correctly(folder: Folder) -> None:
 @pytest.mark.asyncio
 async def test_folder_list_calls_imap(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify list() calls imap.query_messages with correct params."""
-    # Setup mock to return MessageList
-    message_list = MessageList(
+    # Setup mock to return MessageListData (DTO)
+    list_data = MessageListData(
         messages=[],
         total_matches=5,
         total_in_folder=10,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Call list() on the filtered folder
     filtered = folder.from_("alice").unseen()
@@ -96,32 +97,33 @@ async def test_folder_list_calls_imap(folder: Folder, mock_imap: AsyncMock, mock
     assert call_args[1]["limit"] == 50
     assert call_args[1]["offset"] == 0
 
-    assert result is message_list
+    # Verify MessageList created from DTO with correct values
+    assert isinstance(result, MessageList)
+    assert result.total_matches == 5
+    assert result.total_in_folder == 10
+    assert result.folder == "INBOX"
 
 
 @pytest.mark.asyncio
 async def test_folder_injects_smtp(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify messages returned from list() have ._smtp injected."""
-    # Create mock messages without SMTP
-    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg1._smtp = None
+    # Create MessageData DTOs (no SMTP at DTO level)
+    data1 = create_message_data(uid=1, folder="INBOX")
+    data2 = create_message_data(uid=2, folder="INBOX")
 
-    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
-    msg2._smtp = None
-
-    message_list = MessageList(
-        messages=[msg1, msg2],
+    list_data = MessageListData(
+        messages=[data1, data2],
         total_matches=2,
         total_in_folder=2,
         folder="INBOX",
     )
 
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
-    # Call list()
+    # Call list() - converts DTOs to entities with SMTP
     result = await folder.list()
 
-    # Verify SMTP injected
+    # Verify SMTP injected during entity creation
     assert result[0]._smtp is mock_smtp
     assert result[1]._smtp is mock_smtp
 
@@ -129,13 +131,13 @@ async def test_folder_injects_smtp(folder: Folder, mock_imap: AsyncMock, mock_sm
 @pytest.mark.asyncio
 async def test_folder_list_with_pagination(folder: Folder, mock_imap: AsyncMock) -> None:
     """Verify limit and offset passed to IMAP correctly."""
-    message_list = MessageList(
+    list_data = MessageListData(
         messages=[],
         total_matches=100,
         total_in_folder=100,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     await folder.list(limit=20, offset=40)
 
@@ -147,20 +149,20 @@ async def test_folder_list_with_pagination(folder: Folder, mock_imap: AsyncMock)
 @pytest.mark.asyncio
 async def test_folder_first_returns_first_message(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify first() returns first message or None when empty."""
-    # Test with messages
-    msg = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg._smtp = None
+    # Test with messages - use DTO
+    data = create_message_data(uid=1, folder="INBOX")
 
-    message_list = MessageList(
-        messages=[msg],
+    list_data = MessageListData(
+        messages=[data],
         total_matches=1,
         total_in_folder=1,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     result = await folder.first()
-    assert result is msg
+    assert result is not None
+    assert result.uid == 1
     assert result._smtp is mock_smtp
 
     # Verify limit=1 was passed
@@ -168,7 +170,7 @@ async def test_folder_first_returns_first_message(folder: Folder, mock_imap: Asy
     assert call_args[1]["limit"] == 1
 
     # Test with empty result
-    empty_list = MessageList(
+    empty_list = MessageListData(
         messages=[],
         total_matches=0,
         total_in_folder=0,
@@ -183,16 +185,15 @@ async def test_folder_first_returns_first_message(folder: Folder, mock_imap: Asy
 @pytest.mark.asyncio
 async def test_folder_first_with_kwargs(folder: Folder, mock_imap: AsyncMock) -> None:
     """Verify first(from_='alice') applies kwargs then returns first."""
-    msg = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg._smtp = None
+    data = create_message_data(uid=1, folder="INBOX", from_email="sender@example.com")
 
-    message_list = MessageList(
-        messages=[msg],
+    list_data = MessageListData(
+        messages=[data],
         total_matches=1,
         total_in_folder=1,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Call first() with kwargs
     result = await folder.first(from_="alice@example.com")
@@ -203,7 +204,8 @@ async def test_folder_first_with_kwargs(folder: Folder, mock_imap: AsyncMock) ->
     assert "FROM" in query.to_imap_criteria()
     assert "alice@example.com" in query.to_imap_criteria()
 
-    assert result is msg
+    assert result is not None
+    assert result.uid == 1
 
 
 @pytest.mark.asyncio
@@ -280,22 +282,22 @@ async def test_folder_immutability_reuse(folder: Folder) -> None:
 @pytest.mark.asyncio
 async def test_folder_first_with_invalid_kwarg(folder: Folder, mock_imap: AsyncMock) -> None:
     """Verify first() with invalid kwargs doesn't break."""
-    msg = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg._smtp = None
+    data = create_message_data(uid=1, folder="INBOX")
 
-    message_list = MessageList(
-        messages=[msg],
+    list_data = MessageListData(
+        messages=[data],
         total_matches=1,
         total_in_folder=1,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Call first() with invalid kwarg (should be ignored)
     result = await folder.first(invalid_param="ignored")
 
     # Should still work
-    assert result is msg
+    assert result is not None
+    assert result.uid == 1
 
 
 # Story 3.3.1: Async Iteration Protocol Tests
@@ -304,31 +306,31 @@ async def test_folder_first_with_invalid_kwarg(folder: Folder, mock_imap: AsyncM
 @pytest.mark.asyncio
 async def test_folder_async_iteration_all_messages(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify async for iterates over all messages in folder."""
-    # Setup mock to return MessageList with 3 messages
-    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
-    msg3 = create_mock_message(uid=3, folder="INBOX", mock_imap=mock_imap)
+    # Setup mock to return MessageListData with 3 messages
+    data1 = create_message_data(uid=1, folder="INBOX")
+    data2 = create_message_data(uid=2, folder="INBOX")
+    data3 = create_message_data(uid=3, folder="INBOX")
 
-    message_list = MessageList(
-        messages=[msg1, msg2, msg3],
+    list_data = MessageListData(
+        messages=[data1, data2, data3],
         total_matches=3,
         total_in_folder=3,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Collect messages via async for
     collected = []
     async for message in folder:
         collected.append(message)
 
-    # Verify count and messages
+    # Verify count and messages (by UID, not identity)
     assert len(collected) == 3
-    assert collected[0] is msg1
-    assert collected[1] is msg2
-    assert collected[2] is msg3
+    assert collected[0].uid == 1
+    assert collected[1].uid == 2
+    assert collected[2].uid == 3
 
-    # Verify SMTP was injected (by list() method)
+    # Verify SMTP was injected (by from_data() factory)
     assert collected[0]._smtp is mock_smtp
     assert collected[1]._smtp is mock_smtp
     assert collected[2]._smtp is mock_smtp
@@ -338,16 +340,16 @@ async def test_folder_async_iteration_all_messages(folder: Folder, mock_imap: As
 async def test_folder_async_iteration_with_query(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify async for applies query filters correctly."""
     # Setup mock to return unseen messages
-    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
+    data1 = create_message_data(uid=1, folder="INBOX")
+    data2 = create_message_data(uid=2, folder="INBOX")
 
-    message_list = MessageList(
-        messages=[msg1, msg2],
+    list_data = MessageListData(
+        messages=[data1, data2],
         total_matches=2,
         total_in_folder=10,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Apply query and iterate
     collected = []
@@ -359,23 +361,23 @@ async def test_folder_async_iteration_with_query(folder: Folder, mock_imap: Asyn
     query = call_args[0][1]
     assert "UNSEEN" in query.to_imap_criteria()
 
-    # Verify messages yielded
+    # Verify messages yielded (by UID, not identity)
     assert len(collected) == 2
-    assert collected[0] is msg1
-    assert collected[1] is msg2
+    assert collected[0].uid == 1
+    assert collected[1].uid == 2
 
 
 @pytest.mark.asyncio
 async def test_folder_async_iteration_empty_folder(folder: Folder, mock_imap: AsyncMock) -> None:
     """Verify async for on empty folder completes without error."""
-    # Setup mock to return empty MessageList
-    message_list = MessageList(
+    # Setup mock to return empty MessageListData
+    list_data = MessageListData(
         messages=[],
         total_matches=0,
         total_in_folder=0,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Iterate over empty folder
     collected = []
@@ -390,17 +392,17 @@ async def test_folder_async_iteration_empty_folder(folder: Folder, mock_imap: As
 async def test_folder_async_iteration_matches_list(folder: Folder, mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
     """Verify async for yields same messages as .list() in same order."""
     # Setup mock data
-    msg1 = create_mock_message(uid=1, folder="INBOX", mock_imap=mock_imap)
-    msg2 = create_mock_message(uid=2, folder="INBOX", mock_imap=mock_imap)
-    msg3 = create_mock_message(uid=3, folder="INBOX", mock_imap=mock_imap)
+    data1 = create_message_data(uid=1, folder="INBOX")
+    data2 = create_message_data(uid=2, folder="INBOX")
+    data3 = create_message_data(uid=3, folder="INBOX")
 
-    message_list = MessageList(
-        messages=[msg1, msg2, msg3],
+    list_data = MessageListData(
+        messages=[data1, data2, data3],
         total_matches=3,
         total_in_folder=3,
         folder="INBOX",
     )
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Collect via async for
     collected_iter = []
@@ -409,15 +411,15 @@ async def test_folder_async_iteration_matches_list(folder: Folder, mock_imap: As
 
     # Reset mock call count
     mock_imap.query_messages.reset_mock()
-    mock_imap.query_messages.return_value = message_list
+    mock_imap.query_messages.return_value = list_data
 
     # Collect via .list()
     list_result = await folder.list()
 
-    # Verify equivalence
+    # Verify equivalence (by UID, since each call creates new Message objects)
     assert len(collected_iter) == len(list_result.messages)
     for i, msg in enumerate(collected_iter):
-        assert msg is list_result.messages[i]
+        assert msg.uid == list_result.messages[i].uid
 
 
 def test_folder_repr_no_filters(mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:

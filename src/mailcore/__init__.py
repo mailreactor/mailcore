@@ -17,7 +17,14 @@ from mailcore.message import Message
 from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.query import Q, Query
-from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
+from mailcore.types import (
+    FolderInfo,
+    FolderStatus,
+    MessageData,
+    MessageFlag,
+    MessageListData,
+    SendResult,
+)
 
 __all__ = [
     "Mailbox",
@@ -35,6 +42,8 @@ __all__ = [
     "EmailAddress",
     "MessageFlag",
     "MessageList",
+    "MessageData",
+    "MessageListData",
     "FolderInfo",
     "FolderStatus",
     "SendResult",
