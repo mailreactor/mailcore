@@ -20,3 +20,19 @@ class FolderNotFoundError(MailcoreError):
         """
         self.folder = folder
         super().__init__(f"Folder '{folder}' does not exist")
+
+
+class SMTPError(MailcoreError):
+    """Raised when SMTP operation fails.
+
+    Base exception for all SMTP-related errors including connection
+    failures, authentication errors, and send failures.
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize SMTPError.
+
+        Args:
+            message: Description of the SMTP error
+        """
+        super().__init__(message)

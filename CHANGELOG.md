@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SMTPError exception class** (Story 3.13)
+  - New exception in `mailcore.exceptions` module for SMTP operation failures
+  - Inherits from `MailcoreError` base exception
+  - Covers connection failures, authentication errors, and send failures
+  - Usage:
+    ```python
+    from mailcore import SMTPError
+    
+    try:
+        await draft.send()
+    except SMTPError as e:
+        print(f"SMTP error: {e}")
+        print(f"Original cause: {e.__cause__}")  # Exception chaining preserved
+    ```
+  - Protocol adapters (mailcore-aiosmtplib) wrap aiosmtplib exceptions with clear messages
+
 - **FolderNotFoundError exception class** (Story 3.11.3)
   - New exception in `mailcore.exceptions` module for IMAP folder not found errors
   - Inherits from `MailcoreError` base exception
