@@ -63,3 +63,36 @@ def test_message_list_metadata() -> None:
     assert result.total_matches == 42
     assert result.total_in_folder == 100
     assert result.folder == "Sent"
+
+
+def test_message_list_repr() -> None:
+    """Verify MessageList repr shows key stats."""
+    ml = MessageList(
+        messages=[],
+        total_matches=73,
+        total_in_folder=1542,
+        folder="INBOX",
+    )
+
+    repr_str = repr(ml)
+    assert "MessageList" in repr_str
+    assert "returned=0" in repr_str
+    assert "total_matches=73" in repr_str
+    assert "total_in_folder=1542" in repr_str
+    assert "folder='INBOX'" in repr_str
+
+
+def test_message_list_repr_with_messages() -> None:
+    """Verify MessageList repr shows correct returned count."""
+    messages = [1, 2, 3]
+    ml = MessageList(
+        messages=messages,
+        total_matches=10,
+        total_in_folder=100,
+        folder="Sent",
+    )
+
+    repr_str = repr(ml)
+    assert "returned=3" in repr_str
+    assert "total_matches=10" in repr_str
+    assert "folder='Sent'" in repr_str

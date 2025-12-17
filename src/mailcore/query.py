@@ -22,11 +22,15 @@ class Query:
     Example:
         >>> # Simple query
         >>> q = Q.from_('alice@example.com')
+        >>> q  # REPL-friendly repr
+        Query(type='from', value='alice@example.com')
         >>> q.to_imap_criteria()
         ['FROM', 'alice@example.com']
 
         >>> # AND query (flattened)
         >>> q = Q.from_('alice') & Q.unseen()
+        >>> q  # Shows nested structure
+        Query(type='and', left=Query(type='from', value='alice'), right=Query(type='unseen'))
         >>> q.to_imap_criteria()
         ['FROM', 'alice', 'UNSEEN']
 
@@ -269,6 +273,41 @@ class Query:
             Query object for ALL criterion
         """
         return Query(criteria=["ALL"])
+
+    def __repr__(self) -> str:
+        """Developer-friendly representation showing query type.
+
+        Returns:
+            Query(type='...') or recursive for compound queries
+
+        Example:
+            >>> Q.from_('alice@example.com')
+            Query(type='from', value='alice@example.com')
+
+            >>> Q.unseen()
+            Query(type='unseen')
+
+            >>> Q.from_('alice') & Q.unseen()
+            Query(type='and', left=Query(...), right=Query(...))
+        """
+        if self._operation == "AND":
+            return f"Query(type='and', left={self._left!r}, right={self._right!r})"
+        elif self._operation == "OR":
+            return f"Query(type='or', left={self._left!r}, right={self._right!r})"
+        elif self._operation == "NOT":
+            return f"Query(type='not', query={self._left!r})"
+        elif self._criteria is not None:
+            # Leaf criterion - extract type and value
+            if len(self._criteria) == 1:
+                # Flag query (no value)
+                return f"Query(type={self._criteria[0].lower()!r})"
+            else:
+                # Query with value (e.g., ['FROM', 'alice'])
+                query_type = self._criteria[0].lower()
+                value = self._criteria[1]
+                return f"Query(type={query_type!r}, value={value!r})"
+        else:
+            return "Query()"
 
 
 # Alias for shorter syntax

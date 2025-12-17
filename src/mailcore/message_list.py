@@ -29,6 +29,8 @@ class MessageList:
         42
         >>> result.folder
         'INBOX'
+        >>> result  # REPL-friendly repr
+        MessageList(returned=0, total_matches=42, total_in_folder=100, folder='INBOX')
     """
 
     def __init__(
@@ -125,3 +127,27 @@ class MessageList:
             True
         """
         return self.total_matches > len(self.messages)
+
+    def __repr__(self) -> str:
+        """Developer-friendly representation showing key stats.
+
+        Returns:
+            MessageList(returned=X, total_matches=Y, total_in_folder=Z, folder='...')
+
+        Example:
+            >>> messages = MessageList(
+            ...     messages=[1, 2, 3],
+            ...     total_matches=73,
+            ...     total_in_folder=1542,
+            ...     folder="INBOX"
+            ... )
+            >>> messages
+            MessageList(returned=3, total_matches=73, total_in_folder=1542, folder='INBOX')
+        """
+        return (
+            f"MessageList("
+            f"returned={len(self.messages)}, "
+            f"total_matches={self.total_matches}, "
+            f"total_in_folder={self.total_in_folder}, "
+            f"folder={self.folder!r})"
+        )

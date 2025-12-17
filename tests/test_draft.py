@@ -376,3 +376,38 @@ async def test_draft_send_with_correct_from_address(mock_smtp: SMTPConnection) -
     from_addr = call_args.kwargs["from_"]
     assert isinstance(from_addr, EmailAddress)
     assert from_addr.email == "sender@example.com"
+
+
+def test_draft_repr_minimal(mock_smtp):
+    """Verify Draft repr with minimal fields."""
+    draft = Draft(smtp=mock_smtp, default_sender="me@example.com")
+    draft.to("alice@example.com").subject("Hello")
+
+    repr_str = repr(draft)
+    assert "Draft" in repr_str
+    assert "to=['alice@example.com']" in repr_str
+    assert "subject='Hello'" in repr_str
+    assert "body=False" in repr_str
+    assert "attachments=0" in repr_str
+
+
+def test_draft_repr_with_body_and_attachments(mock_smtp):
+    """Verify Draft repr shows body and attachment presence."""
+    draft = Draft(smtp=mock_smtp, default_sender="me@example.com")
+    draft.to("alice@example.com").subject("Report").body("Some text")
+    draft._attachments = [Mock(), Mock()]
+
+    repr_str = repr(draft)
+    assert "body=True" in repr_str
+    assert "attachments=2" in repr_str
+
+
+def test_draft_repr_long_subject(mock_smtp):
+    """Verify Draft repr truncates long subject."""
+    long_subject = "A" * 60  # 60 characters
+    draft = Draft(smtp=mock_smtp, default_sender="me@example.com")
+    draft.subject(long_subject)
+
+    repr_str = repr(draft)
+    assert "..." in repr_str  # Truncated
+    assert len(repr_str) < 200  # Reasonable length

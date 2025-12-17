@@ -418,3 +418,20 @@ async def test_folder_async_iteration_matches_list(folder: Folder, mock_imap: As
     assert len(collected_iter) == len(list_result.messages)
     for i, msg in enumerate(collected_iter):
         assert msg is list_result.messages[i]
+
+
+def test_folder_repr_no_filters(mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
+    """Verify Folder repr without filters."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "me@example.com")
+
+    assert repr(folder) == "Folder('INBOX')"
+
+
+def test_folder_repr_with_filters(mock_imap: AsyncMock, mock_smtp: AsyncMock) -> None:
+    """Verify Folder repr with active filters."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "me@example.com")
+    filtered = folder.from_("alice").unseen()
+
+    repr_str = repr(filtered)
+    assert "Folder('INBOX'" in repr_str
+    assert "filters=2" in repr_str

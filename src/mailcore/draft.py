@@ -32,8 +32,11 @@ class Draft:
 
     Example:
         >>> # Created by mailbox.compose()
-        >>> draft = Draft(smtp=smtp_connection)
-        >>> draft.to('alice@example.com').subject('Hi').body('Hello').send()
+        >>> draft = Draft(smtp=smtp_connection, default_sender='me@example.com')
+        >>> draft.to('alice@example.com').subject('Hi').body('Hello')
+        >>> draft  # REPL-friendly repr
+        Draft(to=['alice@example.com'], subject='Hi', body=True, attachments=0)
+        >>> await draft.send()
 
         >>> # Created by message.reply()
         >>> reply = message.reply(quote=True)
@@ -421,3 +424,23 @@ class Draft:
         )
 
         return result.message_id
+
+    def __repr__(self) -> str:
+        """Developer-friendly representation showing composition state.
+
+        Returns:
+            Draft(to=[...], subject='...', body=True/False, attachments=N)
+
+        Example:
+            >>> draft = Draft(smtp=smtp_conn, default_sender='me@example.com')
+            >>> draft.to('alice@example.com').subject('Hello')
+            >>> draft
+            Draft(to=['alice@example.com'], subject='Hello', body=False, attachments=0)
+        """
+        to_list = self._to if self._to else []
+        subject = self._subject
+        if subject and len(subject) > 50:
+            subject = subject[:47] + "..."
+        has_body = bool(self._body or self._body_html)
+
+        return f"Draft(to={to_list}, subject={subject!r}, body={has_body}, attachments={len(self._attachments)})"

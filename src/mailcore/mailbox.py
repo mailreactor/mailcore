@@ -85,6 +85,7 @@ class Mailbox:
     Args:
         imap: IMAP connection for folder operations
         smtp: SMTP connection for sending
+        default_sender: Default sender email address (optional, auto-detected from SMTP)
 
     Example:
         >>> from mailcore import Mailbox
@@ -95,7 +96,9 @@ class Mailbox:
         >>> smtp = AIOSMTPAdapter(...)
         >>>
         >>> # Create mailbox
-        >>> mailbox = Mailbox(imap=imap, smtp=smtp)
+        >>> mailbox = Mailbox(imap=imap, smtp=smtp, default_sender='me@example.com')
+        >>> mailbox  # REPL-friendly repr
+        Mailbox(default_sender='me@example.com')
         >>>
         >>> # Tier 1: Fixed shortcut (inbox only)
         >>> inbox = mailbox.inbox
@@ -484,3 +487,16 @@ class Mailbox:
 
         # Not found in any folder
         return None
+
+    def __repr__(self) -> str:
+        """Developer-friendly representation showing connection info.
+
+        Returns:
+            Mailbox(default_sender='...')
+
+        Example:
+            >>> mailbox = Mailbox(imap=imap, smtp=smtp, default_sender='me@example.com')
+            >>> mailbox
+            Mailbox(default_sender='me@example.com')
+        """
+        return f"Mailbox(default_sender={self._default_sender!r})"

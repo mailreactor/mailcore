@@ -133,3 +133,43 @@ def test_q_not_or() -> None:
     """Verify NOT (from alice OR from bob)."""
     q = ~(Q.from_("alice") | Q.from_("bob"))
     assert q.to_imap_criteria() == ["NOT", "OR", "FROM", "alice", "FROM", "bob"]
+
+
+def test_query_repr_simple() -> None:
+    """Verify Query repr for simple queries."""
+    q = Q.from_("alice@example.com")
+    repr_str = repr(q)
+    assert "Query(type='from'" in repr_str
+    assert "value='alice@example.com'" in repr_str
+
+
+def test_query_repr_flag() -> None:
+    """Verify Query repr for flag queries."""
+    q = Q.unseen()
+    assert "Query(type='unseen')" in repr(q)
+
+
+def test_query_repr_compound_and() -> None:
+    """Verify Query repr for AND queries."""
+    q = Q.from_("alice") & Q.unseen()
+    repr_str = repr(q)
+    assert "Query(type='and'" in repr_str
+    assert "left=" in repr_str
+    assert "right=" in repr_str
+
+
+def test_query_repr_compound_or() -> None:
+    """Verify Query repr for OR queries."""
+    q = Q.from_("alice") | Q.from_("bob")
+    repr_str = repr(q)
+    assert "Query(type='or'" in repr_str
+    assert "left=" in repr_str
+    assert "right=" in repr_str
+
+
+def test_query_repr_not() -> None:
+    """Verify Query repr for NOT queries."""
+    q = ~Q.seen()
+    repr_str = repr(q)
+    assert "Query(type='not'" in repr_str
+    assert "query=" in repr_str

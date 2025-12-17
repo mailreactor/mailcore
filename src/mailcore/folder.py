@@ -26,7 +26,9 @@ class Folder:
     Injects SMTP connection into messages for reply/forward operations.
 
     Example:
-        >>> inbox = Folder(imap=imap_adapter, smtp=smtp_adapter, name='INBOX')
+        >>> inbox = Folder(imap=imap_adapter, smtp=smtp_adapter, name='INBOX', default_sender='me@example.com')
+        >>> inbox  # REPL-friendly repr
+        Folder('INBOX')
         >>>
         >>> # Each method returns a new instance
         >>> messages = await inbox.from_('alice@example.com').unseen().list(limit=50)
@@ -36,6 +38,8 @@ class Folder:
         >>>
         >>> # Can save intermediate filters
         >>> alice_messages = inbox.from_('alice')
+        >>> alice_messages  # Shows filter count
+        Folder('INBOX', filters=1)
         >>> urgent = await alice_messages.subject('urgent').list()
         >>> reports = await alice_messages.subject('report').list()
     """
@@ -256,3 +260,23 @@ class Folder:
         message_list = await self._imap.query_messages(self._name, query, limit=0)
 
         return message_list.total_matches
+
+    def __repr__(self) -> str:
+        """Developer-friendly representation showing folder and active filters.
+
+        Returns:
+            Folder('name') or Folder('name', filters=N)
+
+        Example:
+            >>> inbox = Folder(imap, smtp, "INBOX", "me@example.com")
+            >>> inbox
+            Folder('INBOX')
+
+            >>> filtered = inbox.from_('alice').unseen()
+            >>> filtered
+            Folder('INBOX', filters=2)
+        """
+        if not self._query_parts:
+            return f"Folder({self._name!r})"
+
+        return f"Folder({self._name!r}, filters={len(self._query_parts)})"

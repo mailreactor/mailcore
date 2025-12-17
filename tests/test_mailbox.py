@@ -477,3 +477,11 @@ def test_mailbox_rejects_invalid_default_sender(mock_imap: IMAPConnection, mock_
     """Test Mailbox raises ValueError when default_sender is invalid."""
     with pytest.raises(ValueError, match="Invalid default_sender"):
         Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="invalid")
+
+
+def test_mailbox_repr(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Verify Mailbox repr shows default_sender."""
+    mock_smtp.username = "user@example.com"
+    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="me@example.com")
+
+    assert repr(mailbox) == "Mailbox(default_sender='me@example.com')"

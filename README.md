@@ -96,6 +96,35 @@ ruff format .
 pre-commit run --all-files
 ```
 
+## REPL-Friendly Output
+
+All mailcore domain objects provide informative `repr()` output for easy debugging:
+
+```python
+>>> messages = await mailbox.inbox.unseen().list(limit=10)
+>>> messages
+MessageList(returned=10, total_matches=73, total_in_folder=1542, folder='INBOX')
+
+>>> draft = mailbox.compose().to('alice@example.com').subject('Hello')
+>>> draft
+Draft(to=['alice@example.com'], subject='Hello', body=False, attachments=0)
+
+>>> inbox = mailbox.inbox
+>>> inbox
+Folder('INBOX')
+
+>>> filtered = inbox.from_('alice').unseen()
+>>> filtered
+Folder('INBOX', filters=2)
+
+>>> from mailcore import Q
+>>> Q.from_('alice')
+Query(type='from', value='alice')
+
+>>> Q.from_('alice') & Q.unseen()
+Query(type='and', left=Query(type='from', value='alice'), right=Query(type='unseen'))
+```
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details
