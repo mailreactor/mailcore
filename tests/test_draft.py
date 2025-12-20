@@ -241,13 +241,19 @@ async def test_send_requires_to_and_subject(mock_smtp):
 
 
 @pytest.mark.asyncio
-async def test_send_requires_body_or_html(mock_smtp):
-    """Test send() raises ValueError if both body and body_html missing."""
+async def test_send_allows_empty_body(mock_smtp):
+    """Test send() allows empty body (e.g., attachment-only emails)."""
     draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
     draft.to("alice@example.com").subject("Test")
 
-    with pytest.raises(ValueError, match="requires at least one of 'body' or 'body_html'"):
-        await draft.send()
+    # Send without body or body_html (should succeed with empty body)
+    message_id = await draft.send()
+
+    # Verify send was called with empty body_text
+    mock_smtp.send_message.assert_called_once()
+    call_args = mock_smtp.send_message.call_args
+    assert call_args.kwargs["body_text"] == ""
+    assert message_id is not None  # Returns a message_id
 
 
 @pytest.mark.asyncio
@@ -322,6 +328,103 @@ async def test_send_with_attachments_fetches_content(mock_smtp, mock_message):
     assert attachments is not None
     assert len(attachments) == 1
     assert attachments[0] == mock_att
+
+
+# Story 3.22: Forward body inclusion tests
+
+
+@pytest.mark.asyncio
+async def test_send_with_forward_body_fetches_original(mock_smtp, mock_message):
+    """Test include_body=True fetches reference_message.body during send()."""
+    # Mock body fetch
+    mock_body = AsyncMock(spec=MessageBody)
+    mock_body.get_text = AsyncMock(return_value="Original message content.")
+    mock_message._body = mock_body
+
+    # Create forward draft with include_body
+    draft = Draft(
+        smtp=mock_smtp,
+        default_sender="test@example.com",
+        reference_message=mock_message,
+        include_body=True,
+    )
+    draft.to("colleague@example.com").subject("Fwd: Test")
+
+    await draft.send()
+
+    # Verify body was fetched
+    mock_body.get_text.assert_called_once()
+
+    # Verify forward header and original content included
+    call_args = mock_smtp.send_message.call_args
+    body_text = call_args.kwargs["body_text"]
+    assert "---------- Forwarded message ---------" in body_text
+    assert "From: Alice <alice@example.com>" in body_text
+    assert "Date: 2025-12-15 10:00" in body_text
+    assert "Subject: Original Subject" in body_text  # From mock_message fixture
+    assert "To: Bob <bob@example.com>" in body_text
+    assert "Original message content." in body_text
+
+
+@pytest.mark.asyncio
+async def test_forward_body_prepends_to_user_body(mock_smtp, mock_message):
+    """Test user body appears before forward header when both present."""
+    # Mock body fetch
+    mock_body = AsyncMock(spec=MessageBody)
+    mock_body.get_text = AsyncMock(return_value="Original content.")
+    mock_message._body = mock_body
+
+    # Create forward draft with user body
+    draft = Draft(
+        smtp=mock_smtp,
+        default_sender="test@example.com",
+        reference_message=mock_message,
+        include_body=True,
+    )
+    draft.to("colleague@example.com").subject("Fwd: Test").body("FYI")
+
+    await draft.send()
+
+    # Verify user body appears first
+    call_args = mock_smtp.send_message.call_args
+    body_text = call_args.kwargs["body_text"]
+
+    # Find positions
+    fyi_pos = body_text.find("FYI")
+    header_pos = body_text.find("---------- Forwarded message ---------")
+    original_pos = body_text.find("Original content.")
+
+    # Assert ordering: user body < forward header < original content
+    assert fyi_pos < header_pos < original_pos
+
+
+@pytest.mark.asyncio
+async def test_forward_without_body_skips_fetch(mock_smtp, mock_message):
+    """Test include_body=False does NOT fetch original message body."""
+    # Mock body fetch (should NOT be called)
+    mock_body = AsyncMock(spec=MessageBody)
+    mock_body.get_text = AsyncMock(return_value="Original message content.")
+    mock_message._body = mock_body
+
+    # Create forward draft with include_body=False
+    draft = Draft(
+        smtp=mock_smtp,
+        default_sender="test@example.com",
+        reference_message=mock_message,
+        include_body=False,
+    )
+    draft.to("colleague@example.com").subject("Fwd: Test").body("Check this out")
+
+    await draft.send()
+
+    # Verify body was NOT fetched
+    mock_body.get_text.assert_not_called()
+
+    # Verify only user body present (no forward header)
+    call_args = mock_smtp.send_message.call_args
+    body_text = call_args.kwargs["body_text"]
+    assert body_text == "Check this out"
+    assert "---------- Forwarded message ---------" not in body_text
 
 
 # Story 3.14: Draft default_sender and from_() tests

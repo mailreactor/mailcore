@@ -616,6 +616,7 @@ def test_message_forward_creates_draft(mock_imap, mock_smtp):
     assert draft._smtp == mock_smtp
     assert draft._reference_message == message
     assert draft._include_attachments is True
+    assert draft._include_body is True  # Default value
 
 
 def test_message_forward_prefixes_subject(mock_imap, mock_smtp):
@@ -684,6 +685,59 @@ def test_message_forward_requires_smtp(mock_imap):
 
     with pytest.raises(ValueError, match="SMTP connection not available"):
         message.forward()
+
+
+# Story 3.22: Message.forward() include_body parameter tests
+
+
+def test_message_forward_includes_body_by_default(mock_imap, mock_smtp):
+    """Test forward() has include_body=True by default."""
+    message = Message(
+        imap=mock_imap,
+        smtp=None,
+        default_sender=None,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=set(),
+        size=100,
+    )
+    message._smtp = mock_smtp
+    message._default_sender = "me@example.com"
+
+    draft = message.forward()
+
+    assert draft._include_body is True
+
+
+def test_message_forward_without_body(mock_imap, mock_smtp):
+    """Test forward(include_body=False) does not include body."""
+    message = Message(
+        imap=mock_imap,
+        smtp=None,
+        default_sender=None,
+        uid=42,
+        folder="INBOX",
+        message_id="<original@example.com>",
+        from_=EmailAddress("alice@example.com"),
+        to=[EmailAddress("bob@example.com")],
+        cc=[],
+        subject="Test",
+        date=datetime.now(timezone.utc),
+        flags=set(),
+        size=100,
+    )
+    message._smtp = mock_smtp
+    message._default_sender = "me@example.com"
+
+    draft = message.forward(include_body=False)
+
+    assert draft._include_body is False
 
 
 def test_message_from_data_creates_entity(mock_imap, mock_smtp):

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Draft.send() now allows empty body** (Story 3.22)
+  - Removed validation requiring body or body_html
+  - Enables attachment-only emails (RFC 5322 compliant - body is optional)
+  - Empty body defaults to empty string instead of raising ValueError
+  - Backward compatible - existing code with body/body_html continues working
+
+- **Message.forward() now includes original message body by default** (Story 3.22)
+  - Added `include_body: bool = True` parameter to `Message.forward()`
+  - Added `include_body: bool = False` parameter to `Draft.__init__()`
+  - Forward body fetched during `Draft.send()` (lazy, same pattern as reply quote)
+  - Format includes forward header (From, Date, Subject, To) and original content
+  - User body (if provided via `.body()`) appears before forward header
+  - Set `include_body=False` to forward without original message content
+  - Usage:
+    ```python
+    # Forward with body (default)
+    await message.forward().to('alice@example.com').send()
+    
+    # Forward without body
+    await message.forward(include_body=False).to('alice@example.com').send()
+    
+    # Forward with user intro
+    await message.forward().to('alice@example.com').body('FYI').send()
+    # Result: "FYI\n\n---------- Forwarded message ---------\nFrom: ...\n\nOriginal content"
+    ```
+
 ### Added
 
 - **SMTPError exception class** (Story 3.13)

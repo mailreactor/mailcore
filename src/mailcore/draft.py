@@ -53,6 +53,7 @@ class Draft:
         references: list[str] | None = None,
         quote: bool = False,
         include_attachments: bool = False,
+        include_body: bool = False,
     ) -> None:
         """Initialize draft with SMTP connection.
 
@@ -64,6 +65,7 @@ class Draft:
             references: Thread chain (list of Message-IDs)
             quote: Include original message quote (for reply - used during send())
             include_attachments: Include original attachments (for forward - used during send())
+            include_body: Include original message body (for forward - used during send())
 
         Note:
             Not typically instantiated directly - use mailbox.draft(),
@@ -79,6 +81,7 @@ class Draft:
         self._references = references if references is not None else []
         self._quote = quote
         self._include_attachments = include_attachments
+        self._include_body = include_body
 
         # Builder state - mutable fields
         self._from: str | None = None
@@ -355,11 +358,9 @@ class Draft:
             raise ValueError("Draft.send() requires 'to' recipient(s)")
         if self._subject is None:
             raise ValueError("Draft.send() requires 'subject'")
-        if self._body is None and self._body_html is None:
-            raise ValueError("Draft.send() requires at least one of 'body' or 'body_html'")
 
         # Handle quote logic (lazy fetch during send)
-        body_text = self._body
+        body_text = self._body if self._body is not None else ""
         if self._quote and self._reference_message is not None:
             # Fetch body from reference message
             original_text = await self._reference_message.body.get_text()
@@ -376,6 +377,31 @@ class Draft:
                     body_text = f"{body_text}\n\n{quote_text}"
                 else:
                     body_text = quote_text
+
+        # Handle forward body logic (lazy fetch during send)
+        if self._include_body and self._reference_message is not None:
+            # Fetch body from reference message
+            original_text = await self._reference_message.body.get_text()
+            if original_text is not None:
+                # Format forward header
+                from_addr = self._reference_message.from_.to_rfc5322()
+                date_str = self._reference_message.date.strftime("%Y-%m-%d %H:%M")
+                to_recipients = ", ".join([addr.to_rfc5322() for addr in self._reference_message.to])
+
+                forward_header = (
+                    "\n\n---------- Forwarded message ---------\n"
+                    f"From: {from_addr}\n"
+                    f"Date: {date_str}\n"
+                    f"Subject: {self._reference_message.subject}\n"
+                    f"To: {to_recipients}\n\n"
+                )
+
+                # Combine with user body (if any)
+                if body_text:
+                    body_text = f"{body_text}{forward_header}{original_text}"
+                else:
+                    # No user body - just forward content (strip leading newlines)
+                    body_text = f"{forward_header.lstrip()}{original_text}"
 
         # Handle include_attachments logic (lazy fetch during send)
         attachments_to_send = self._attachments.copy()

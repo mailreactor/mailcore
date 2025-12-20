@@ -532,11 +532,12 @@ class Message:
 
         return draft
 
-    def forward(self, include_attachments: bool = True) -> "Draft":
+    def forward(self, include_attachments: bool = True, include_body: bool = True) -> "Draft":
         """Create forward draft.
 
         Args:
             include_attachments: Include original attachments (fetched during send())
+            include_body: Include original message body with formatted header (fetched during send())
 
         Returns:
             Draft pre-configured for forward
@@ -547,6 +548,10 @@ class Message:
         Example:
             >>> draft = message.forward()
             >>> await draft.to('colleague@example.com').body('FYI').send()
+
+            >>> # Forward without body
+            >>> draft = message.forward(include_body=False)
+            >>> await draft.to('colleague@example.com').send()
         """
         # Lazy import to avoid circular import at module level
         from mailcore.draft import Draft
@@ -561,6 +566,7 @@ class Message:
             default_sender=self._default_sender or "",
             reference_message=self,
             include_attachments=include_attachments,
+            include_body=include_body,
         )
 
         # Pre-populate subject: Add "Fwd:" prefix if not already present
