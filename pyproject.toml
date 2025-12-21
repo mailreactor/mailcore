@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mailcore"
-version = "1.0.0"
-description = "Pure Python email library with adapter-based protocol abstraction"
+version = "0.1.0"
+description = "A Python email library designed for intuitive email operations"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Mail Reactor Contributors", email = "maintainers@mailreactor.dev"},
+    {name = "Hans Christian v. Stockhausen", email = "hc@vst.io"},
 ]
 dependencies = [
     # Pure library - ZERO runtime dependencies (stdlib only)

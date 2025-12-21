@@ -4,7 +4,7 @@ This package provides a clean, modern Python API for email operations (send, rec
 with protocol adapters for IMAP and SMTP.
 """
 
-__version__ = "1.0.0"
+__version__ = "0.1.0"
 
 from mailcore.attachment import Attachment, AttachmentResolver, IMAPResolver, SimpleResolver
 from mailcore.body import MessageBody

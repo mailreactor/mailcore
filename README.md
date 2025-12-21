@@ -13,7 +13,7 @@ await message.reply().attach("diagram.png").body("Here you are").send()
 
 # Query and process messages
 async for msg in mailbox.inbox.from_('alice@example.com').unseen():
-    print(msg)  # Message(uid=4, folder='INBOX', from=alice@example.com, subject='Re: Project')
+    ...
     await msg.mark_read()
 ```
 
@@ -180,9 +180,6 @@ await mailbox.delete_folder('Temporary')
 # Move and organize individual messages
 message = await mailbox.inbox.first()
 await message.move_to('Archive')
-await message.mark_read()
-await message.mark_flagged()
-await message.delete()  # Moves to trash
 ```
 
 **9. Bulk operations:**
@@ -198,16 +195,11 @@ await mailbox.copy(important, to_folder='Archive')
 
 # Bulk delete
 old_messages = await mailbox.inbox.seen().list(limit=100)
-await mailbox.delete(old_messages)  # Moves to trash
+await mailbox.delete(old_messages, trash_folder="Trash")  # Moves to trash
 await mailbox.delete(old_messages, permanent=True)  # Permanent delete
-
-# Search across all folders
-message = await mailbox.get("specific-message-id@example.com")
-if message:
-    print(f"Found in folder: {message.folder}")
 ```
 
-**10. Real-time email monitoring (IDLE pattern):**
+**10. Email monitoring:**
 
 ```python
 import asyncio
@@ -216,8 +208,8 @@ async def watch_inbox(mailbox, handler):
     """
     Poll for new messages with 10-second latency.
     
-    For true real-time (sub-second latency), use mailreactor with IDLE support.
-    https://github.com/mailreactor/mailreactor
+    For real-time (sub-second latency), use mailreactor with IDLE support.
+    https://github.com/mailreactor/mailreactor 
     """
     last_uid = 0
     
