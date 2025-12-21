@@ -16,6 +16,13 @@ dependencies = [
     # Pure library - ZERO runtime dependencies (stdlib only)
 ]
 
+[project.urls]
+Homepage = "https://github.com/mailreactor/mailcore"
+Documentation = "https://github.com/mailreactor/mailcore#readme"
+Repository = "https://github.com/mailreactor/mailcore"
+Issues = "https://github.com/mailreactor/mailcore/issues"
+Changelog = "https://github.com/mailreactor/mailcore/releases"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
