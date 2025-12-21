@@ -15,13 +15,24 @@ authors = [
 dependencies = [
     # Pure library - ZERO runtime dependencies (stdlib only)
 ]
+keywords = ["email", "imap", "smtp", "async", "library", "adapter-pattern"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Email",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: AsyncIO",
+]
 
 [project.urls]
 Homepage = "https://github.com/mailreactor/mailcore"
-Documentation = "https://github.com/mailreactor/mailcore#readme"
 Repository = "https://github.com/mailreactor/mailcore"
-Issues = "https://github.com/mailreactor/mailcore/issues"
-Changelog = "https://github.com/mailreactor/mailcore/releases"
+Documentation = "https://github.com/mailreactor/mailcore"
 
 [project.optional-dependencies]
 dev = [
