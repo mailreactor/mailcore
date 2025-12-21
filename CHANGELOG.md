@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **CRITICAL: UID range queries were not filtering correctly** (Story 3.28 bug fix)
+  - `Q.uid_range()` was returning `["UID", "4:*"]` (invalid IMAP search criterion)
+  - Fixed to return `["4:*"]` (valid sequence set)
+  - UID is a **command modifier**, not a search criterion (RFC 3501)
+  - Impact: IDLE polling pattern now works correctly (no infinite loops)
+  - Root cause: Mixing protocol layers (command syntax with search criteria)
+  - Thanks to HC for catching this during manual testing!
+
+### Added
+- **IDLE Protocol Support (Story 3.28):**
+  - Added `select_folder()`, `idle_start()`, `idle_wait()`, `idle_done()` methods to IMAPConnection protocol (RFC 2177)
+  - Added `Folder.uid_range(start, end)` method for filtering messages by UID range
+  - Added `Q.uid_range(start, end)` static factory method for UID range queries
+  - IDLE methods enable real-time email monitoring in mailreactor (future epic)
+  - Polling pattern example added to README for 10-second latency monitoring
+  - **Pattern improvement:** Process messages in chronological order (oldest first) for intuitive handler behavior
+  - Documentation: IDLE section in mailcore-connection-protocols.md, uid_range in api-surface.md
+  
+### Changed
+- MockIMAPConnection now implements all IDLE protocol methods (raises NotImplementedError for consistency)
+- **Polling pattern:** Messages now processed via `sorted(new_messages, key=lambda m: m.uid)` for chronological order
+
+### Fixed
 
 - **Draft.save() now materializes quoted/forwarded content** (Story 3.26)
   - Bug: Saved reply/forward drafts lost quoted/forwarded content when edited later

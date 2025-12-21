@@ -671,3 +671,45 @@ def test_folder_complex_chaining_with_new_filters(mock_imap, mock_smtp) -> None:
     assert filtered._query_parts[1].to_imap_criteria() == ["SINCE", "01-Dec-2025"]
     # Third part: LARGER size
     assert filtered._query_parts[2].to_imap_criteria() == ["LARGER", "1000000"]
+
+
+# UID range tests (Story 3.28)
+
+
+def test_folder_uid_range_numeric_end(mock_imap, mock_smtp) -> None:
+    """Verify folder.uid_range() with numeric end creates correct query."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.uid_range(100, 200)
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["100:200"]
+
+
+def test_folder_uid_range_star_end(mock_imap, mock_smtp) -> None:
+    """Verify folder.uid_range() with '*' end creates correct query (IDLE pattern)."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.uid_range(173, "*")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["173:*"]
+
+
+def test_folder_uid_range_immutability(mock_imap, mock_smtp) -> None:
+    """Verify folder.uid_range() returns NEW Folder instance (immutable pattern)."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.uid_range(100, 200)
+    assert folder is not filtered
+    assert folder._query_parts == []
+    assert len(filtered._query_parts) == 1
+
+
+def test_folder_uid_range_chainable(mock_imap, mock_smtp) -> None:
+    """Verify folder.uid_range() is chainable with other filters."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    # IDLE pattern: new messages that are unseen
+    filtered = folder.uid_range(100, "*").unseen()
+    assert len(filtered._query_parts) == 2
+    assert filtered._query_parts[0].to_imap_criteria() == ["100:*"]
+    assert filtered._query_parts[1].to_imap_criteria() == ["UNSEEN"]

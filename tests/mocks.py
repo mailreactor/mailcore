@@ -15,6 +15,7 @@ from typing import Any
 
 from mailcore.attachment import Attachment, IMAPResolver
 from mailcore.email_address import EmailAddress
+from mailcore.exceptions import FolderNotFoundError
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.query import Query
 from mailcore.types import FolderInfo, FolderStatus, MessageData, MessageFlag, MessageListData, SendResult
@@ -476,6 +477,57 @@ class MockIMAPConnection(IMAPConnection):
 
         self._folders[folder].append(msg)
         return uid
+
+    async def select_folder(self, folder: str) -> dict[str, Any]:
+        """SELECT folder for operations (mock implementation).
+
+        Returns mock folder status for testing.
+
+        Args:
+            folder: Folder name to select
+
+        Returns:
+            Dictionary with mock folder status:
+                - exists: Total message count
+                - recent: Recent message count
+                - uidvalidity: Mock UIDVALIDITY value
+        """
+        # Check if folder exists in mock storage
+        if folder in self._folders:
+            # Return mock status (exists = total messages in folder)
+            return {"exists": len(self._folders[folder]), "recent": 0, "uidvalidity": 1}
+
+        # Folder not found
+        raise FolderNotFoundError(folder)
+
+    async def idle_start(self) -> None:
+        """Enter IDLE mode (NOT SUPPORTED by MockIMAPConnection).
+
+        Raises:
+            NotImplementedError: Mock does not support IDLE (consistent with IMAPClientAdapter)
+        """
+        raise NotImplementedError(
+            "IDLE not supported by MockIMAPConnection. This mock mimics IMAPClientAdapter behavior for testing."
+        )
+
+    async def idle_wait(self, timeout: int = 1800) -> list[str]:
+        """Wait for IDLE events (NOT SUPPORTED by MockIMAPConnection).
+
+        Args:
+            timeout: Unused (IDLE not supported)
+
+        Raises:
+            NotImplementedError: IDLE not supported by mock
+        """
+        raise NotImplementedError("IDLE not supported by MockIMAPConnection.")
+
+    async def idle_done(self) -> None:
+        """Exit IDLE mode (NOT SUPPORTED by MockIMAPConnection).
+
+        Raises:
+            NotImplementedError: IDLE not supported by mock
+        """
+        raise NotImplementedError("IDLE not supported by MockIMAPConnection.")
 
 
 class MockSMTPConnection(SMTPConnection):

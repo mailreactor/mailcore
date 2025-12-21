@@ -207,6 +207,40 @@ if message:
     print(f"Found in folder: {message.folder}")
 ```
 
+**10. Real-time email monitoring (IDLE pattern):**
+
+```python
+import asyncio
+
+async def watch_inbox(mailbox, handler):
+    """
+    Poll for new messages with 10-second latency.
+    
+    For true real-time (sub-second latency), use mailreactor with IDLE support.
+    https://github.com/mailreactor/mailreactor
+    """
+    last_uid = 0
+    
+    while True:
+        # Fetch only new messages (after last seen UID)
+        new_messages = await mailbox.inbox.uid_range(last_uid + 1, "*").list()
+        
+        # Process messages in chronological order (oldest first)
+        for message in sorted(new_messages, key=lambda m: m.uid):
+            await handler(message)
+            last_uid = message.uid  # Track sequentially
+        
+        await asyncio.sleep(10)  # Poll every 10 seconds
+
+# Usage
+async def handle_new_message(message):
+    print(f"New email: {message.subject}")
+    if "urgent" in message.subject.lower():
+        await message.reply().send(body="Got it! Working on it.")
+
+await watch_inbox(mailbox, handle_new_message)
+```
+
 ---
 
 ## Development

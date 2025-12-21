@@ -1,10 +1,13 @@
 """Tests for ABC runtime verification in protocols.py."""
 
+from typing import Any
+
 import pytest
 
 from mailcore.attachment import Attachment
 from mailcore.email_address import EmailAddress
 from mailcore.protocols import IMAPConnection, SMTPConnection
+from mailcore.query import Query
 from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
 
 
@@ -42,7 +45,6 @@ def test_incomplete_imap_implementation_raises_typeerror() -> None:
 async def test_complete_imap_implementation_succeeds() -> None:
     """Verify complete IMAPConnection implementation can be instantiated."""
     from mailcore.message_list import MessageList
-    from mailcore.query import Query
 
     class CompleteIMAPAdapter(IMAPConnection):
         """Complete adapter implementing all 12 abstract methods."""
@@ -115,6 +117,18 @@ async def test_complete_imap_implementation_succeeds() -> None:
             custom_flags: set[str] | None = None,
         ) -> int:
             return 1
+
+        async def select_folder(self, folder: str) -> dict[str, Any]:
+            return {"exists": 0, "recent": 0, "uidvalidity": 1}
+
+        async def idle_start(self) -> None:
+            pass
+
+        async def idle_wait(self, timeout: int = 1800) -> list[str]:
+            return []
+
+        async def idle_done(self) -> None:
+            pass
 
     # Should instantiate without errors
     imap = CompleteIMAPAdapter()

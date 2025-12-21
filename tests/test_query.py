@@ -304,3 +304,36 @@ def test_q_complex_nested_with_new_filters() -> None:
 
     q = (Q.since(date(2025, 12, 1)) & Q.larger(100_000)) | Q.text("budget")
     assert q.to_imap_criteria() == ["OR", "SINCE", "01-Dec-2025", "LARGER", "100000", "TEXT", "budget"]
+
+
+# UID range tests (Story 3.28)
+
+
+def test_q_uid_range_numeric_end() -> None:
+    """Verify uid_range with numeric end creates correct IMAP criteria."""
+    q = Q.uid_range(100, 200)
+    assert q.to_imap_criteria() == ["100:200"]
+
+
+def test_q_uid_range_star_end() -> None:
+    """Verify uid_range with '*' end creates correct IMAP criteria (IDLE pattern)."""
+    q = Q.uid_range(173, "*")
+    assert q.to_imap_criteria() == ["173:*"]
+
+
+def test_q_uid_range_single_message() -> None:
+    """Verify uid_range for single message (start == end)."""
+    q = Q.uid_range(42, 42)
+    assert q.to_imap_criteria() == ["42:42"]
+
+
+def test_q_uid_range_with_boolean_operators() -> None:
+    """Verify uid_range combines with boolean operators."""
+    q = Q.uid_range(100, "*") & Q.unseen()
+    assert q.to_imap_criteria() == ["100:*", "UNSEEN"]
+
+
+def test_q_uid_range_or_query() -> None:
+    """Verify uid_range with OR operator."""
+    q = Q.uid_range(1, 50) | Q.uid_range(200, 250)
+    assert q.to_imap_criteria() == ["OR", "1:50", "200:250"]

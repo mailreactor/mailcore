@@ -4,6 +4,11 @@ CRITICAL: Adapter implementations MUST base64 decode attachment content before r
 IMAPClient returns base64-encoded bytes - use base64.b64decode() to prevent corrupt attachments.
 
 Validated in Story 3.0: DOCX attachment 24,184 bytes base64 -> 17,671 bytes decoded.
+
+IDLE Protocol Support (Story 3.28):
+This module defines IDLE protocol methods (RFC 2177) to enable real-time email monitoring.
+IDLE belongs in mailreactor (application layer), NOT mailcore (library layer).
+mailcore provides protocol contracts - mailreactor implements infrastructure (event loops, webhooks).
 """
 
 from abc import ABC, abstractmethod
@@ -396,6 +401,148 @@ class IMAPConnection(ABC):
                 flags={MessageFlag.DRAFT, MessageFlag.SEEN},
                 custom_flags={'$Forwarded'}
             )
+        """
+        ...
+
+    @abstractmethod
+    async def select_folder(self, folder: str) -> dict[str, Any]:
+        """SELECT folder for operations (required before IDLE).
+
+        IMAP operation: SELECT
+
+        RFC 2177 IDLE requires an active folder selection before entering IDLE mode.
+        This method explicitly selects a folder and returns server response with mailbox state.
+
+        Args:
+            folder: Folder name to select (e.g., 'INBOX')
+
+        Returns:
+            Dictionary with folder status after SELECT:
+                - exists: Total message count in folder
+                - recent: Count of messages with \\Recent flag
+                - uidvalidity: UIDVALIDITY value (changes when UIDs reset)
+
+        Raises:
+            FolderNotFoundError: If folder doesn't exist
+
+        Note:
+            This is infrastructure-level (required for IDLE protocol), not domain logic.
+            Most mailcore operations (query_messages, fetch_message_body, etc.) perform
+            SELECT internally as needed. This method exposes SELECT for IDLE support.
+
+        Example:
+            # Prepare for IDLE monitoring
+            status = await imap.select_folder('INBOX')
+            print(f"Monitoring {status['exists']} messages")
+
+            # Start IDLE mode (see idle_start)
+            await imap.idle_start()
+        """
+        ...
+
+    @abstractmethod
+    async def idle_start(self) -> None:
+        """Enter IDLE mode on selected folder (RFC 2177).
+
+        IMAP operation: IDLE
+
+        RFC 2177 IDLE allows server to push real-time notifications when folder state changes.
+        Must call select_folder() first to choose which folder to monitor.
+
+        Returns:
+            None - enters IDLE mode (use idle_wait to receive events)
+
+        Raises:
+            RuntimeError: If no folder selected (must call select_folder first)
+            NotImplementedError: If adapter doesn't support IDLE (e.g., IMAPClientAdapter)
+
+        Note:
+            IDLE is application-layer infrastructure, NOT library domain.
+            mailcore defines protocol contract - mailreactor implements event loops.
+            IMAPClientAdapter cannot support IDLE (synchronous IMAPClient limitation).
+            For IDLE support, use mailcore-aioimaplib adapter.
+
+        Example:
+            # Select folder and start IDLE
+            await imap.select_folder('INBOX')
+            await imap.idle_start()
+
+            # Wait for events (see idle_wait)
+            events = await imap.idle_wait(timeout=1800)
+        """
+        ...
+
+    @abstractmethod
+    async def idle_wait(self, timeout: int = 1800) -> list[str]:
+        """Wait for IDLE events (RFC 2177).
+
+        IMAP operation: Wait for server responses during IDLE mode
+
+        RFC 2177 default timeout: 1800 seconds (30 minutes).
+        Server pushes notifications when folder state changes (new messages, deletions, flag changes).
+
+        Args:
+            timeout: Seconds to wait for events (default: 1800 per RFC 2177)
+                     Client should send DONE before server timeout to maintain connection.
+
+        Returns:
+            List of event type strings from server:
+                - "EXISTS": New message arrived
+                - "EXPUNGE": Message deleted
+                - "FETCH": Message flags changed
+                - "RECENT": Recent count changed
+
+        Raises:
+            RuntimeError: If IDLE not started (must call idle_start first)
+            NotImplementedError: If adapter doesn't support IDLE
+
+        Note:
+            After receiving events, call idle_done() to exit IDLE mode, then query
+            folder to get updated state. For new messages, use uid_range(last_uid + 1, "*")
+            to fetch only messages added since last check.
+
+        Example:
+            # Wait for events
+            events = await imap.idle_wait(timeout=1800)
+
+            if "EXISTS" in events:
+                # Exit IDLE to query new messages
+                await imap.idle_done()
+
+                # Fetch messages after last seen UID
+                new_messages = await folder.uid_range(last_uid + 1, "*").list()
+        """
+        ...
+
+    @abstractmethod
+    async def idle_done(self) -> None:
+        """Exit IDLE mode (RFC 2177).
+
+        IMAP operation: DONE (terminate IDLE)
+
+        Exits IDLE mode and returns connection to normal command/response state.
+        Must call this before executing other IMAP operations (SEARCH, FETCH, etc.).
+
+        Returns:
+            None - exits IDLE mode
+
+        Raises:
+            RuntimeError: If IDLE not active
+            NotImplementedError: If adapter doesn't support IDLE
+
+        Note:
+            After DONE, folder remains selected - safe to immediately query for updates.
+            To monitor again, call idle_start() (no need to re-select folder).
+
+        Example:
+            # Exit IDLE mode
+            await imap.idle_done()
+
+            # Now safe to execute queries
+            messages = await folder.unseen().list()
+
+            # Re-enter IDLE if desired
+            await imap.idle_start()
         """
         ...
 

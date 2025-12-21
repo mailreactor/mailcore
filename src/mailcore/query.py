@@ -276,6 +276,42 @@ class Query:
         """
         return Query(criteria=["ALL"])
 
+    # UID range filter
+
+    @staticmethod
+    def uid_range(start: int, end: int | str) -> "Query":
+        """Filter by UID range.
+
+        Args:
+            start: Starting UID (inclusive)
+            end: Ending UID (inclusive) or "*" for highest UID in folder
+
+        Returns:
+            Query object for UID range criterion
+
+        Note:
+            IDLE pattern: Use uid_range(last_uid + 1, "*") to fetch only new messages
+            after last seen UID. This is essential for IDLE event handling.
+
+            IMAP Protocol Note:
+            UID ranges are NOT search criteria - they're sequence sets used in SEARCH.
+            IMAPClient.search() always returns UIDs, so we pass just the range string.
+            The adapter doesn't need special handling for UID queries.
+
+        Example:
+            >>> Q.uid_range(100, 200)
+            Query(criteria=['100:200'])
+            >>> Q.uid_range(173, "*")
+            Query(criteria=['173:*'])
+
+            # IDLE pattern - fetch messages after last seen UID
+            >>> last_uid = 42
+            >>> new_messages_query = Q.uid_range(last_uid + 1, "*")
+        """
+        # UID range is a sequence set, not a search criterion
+        # Pass just the range - IMAPClient.search() handles UID mode
+        return Query(criteria=[f"{start}:{end}"])
+
     # Date filters
 
     @staticmethod

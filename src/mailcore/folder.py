@@ -204,6 +204,36 @@ class Folder:
         """
         return self._clone_with_query(Query.recent())
 
+    # UID range filter
+
+    def uid_range(self, start: int, end: int | str) -> "Folder":
+        """Filter by UID range.
+
+        Args:
+            start: Starting UID (inclusive)
+            end: Ending UID (inclusive) or "*" for highest UID in folder
+
+        Returns:
+            New Folder instance with UID range filter applied (immutable pattern)
+
+        Note:
+            IDLE pattern: Use uid_range(last_uid + 1, "*") to fetch only new messages
+            after last seen UID. This is essential for IDLE event handling where you
+            want to retrieve messages added since your last check.
+
+        Example:
+            # Fetch specific UID range
+            >>> messages = await folder.uid_range(100, 200).list()
+
+            # IDLE pattern - fetch all messages after last seen UID
+            >>> last_uid = 42
+            >>> new_messages = await folder.uid_range(last_uid + 1, "*").list()
+
+            # Combine with other filters
+            >>> unseen_new = await folder.uid_range(100, "*").unseen().list()
+        """
+        return self._clone_with_query(Query.uid_range(start, end))
+
     # Date filters
 
     def since(self, date: "datetime.date") -> "Folder":
