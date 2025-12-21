@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Draft.save() now materializes quoted/forwarded content** (Story 3.26)
+  - Bug: Saved reply/forward drafts lost quoted/forwarded content when edited later
+  - Root cause: Quote/forward logic only ran in `send()`, not in `save()`
+  - Fix: Extracted logic into `_build_final_body()` helper, called by both `save()` and `send()`
+  - Impact: save → edit → send workflow now preserves all content
+  - Details:
+    - Reply with `quote=True` → saved body includes quoted original
+    - Forward with `include_body=True` → saved body includes forwarded content
+    - `save()` and `send()` produce identical body text (consistency)
+    - Gracefully handles missing reference message (returns user body only)
+  - No breaking changes: Purely additive bug fix
+  - Usage:
+    ```python
+    # Reply with quote - quote is now preserved on save
+    draft = message.reply(quote=True).body("My response")
+    await draft.save('Drafts')  # Saves full text with quote
+    
+    # Edit later - quoted content is still there
+    saved_msg = await folders['Drafts'].list()[0]
+    editable = await saved_msg.edit()
+    # editable._body contains both response AND quoted original
+    
+    # Forward with body - forward content is now preserved on save
+    draft = message.forward(include_body=True).body("FYI")
+    await draft.save('Drafts')  # Saves full text with forward
+    ```
+  - Related issue: docs/ISSUE-draft-quote-forward-not-materialized-on-save.md (RESOLVED)
+
 - **Draft.send() now allows empty body** (Story 3.22)
   - Removed validation requiring body or body_html
   - Enables attachment-only emails (RFC 5322 compliant - body is optional)

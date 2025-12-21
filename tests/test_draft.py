@@ -26,7 +26,7 @@ def mock_message(mock_smtp):
     msg = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_sender="sender@example.com",  # Add default sender for reply/forward
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -650,7 +650,6 @@ async def test_draft_save_replaces_original_same_folder(mock_smtp, mock_imap):
     delete_call = mock_imap.delete_message.call_args
     assert delete_call.kwargs["folder"] == "Drafts"
     assert delete_call.kwargs["uid"] == 42
-    assert delete_call.kwargs["permanent"] is True
 
 
 @pytest.mark.asyncio
@@ -717,3 +716,217 @@ async def test_draft_save_handles_no_appenduid(mock_smtp, mock_imap):
     await draft.save(folder="Drafts")
     # delete_message not called because original_uid is 0 (falsy, not None)
     assert not mock_imap.delete_message.called
+
+
+# ==============================================================================
+# Story 3.26: Quote/Forward Body Materialization Tests
+# ==============================================================================
+
+
+@pytest.mark.asyncio
+async def test_reply_quote_materialized_on_save(mock_imap, mock_smtp, mock_message):
+    """Test AC #1: Reply with quote=True, save to drafts, edit → body contains quote."""
+    # Setup mock message with body
+    mock_body = AsyncMock()
+    mock_body.get_text = AsyncMock(return_value="Original message content")
+    mock_message._body = mock_body
+
+    # Create reply with quote
+    draft = mock_message.reply(quote=True)
+    draft._imap = mock_imap  # Inject IMAP for save
+    draft.to("recipient@example.com").subject("Re: Test").body("My response")
+
+    # Save to Drafts
+    await draft.save(folder="Drafts")
+
+    # Verify body_text passed to append_message contains BOTH response AND quote
+    call_args = mock_imap.append_message.call_args
+    saved_body = call_args.kwargs["body_text"]
+
+    assert "My response" in saved_body
+    assert "> Original message content" in saved_body
+    assert "wrote:" in saved_body
+
+
+@pytest.mark.asyncio
+async def test_forward_body_materialized_on_save(mock_imap, mock_smtp, mock_message):
+    """Test AC #2: Forward with include_body=True, save to drafts → body contains forward."""
+    # Setup mock message with body
+    mock_body = AsyncMock()
+    mock_body.get_text = AsyncMock(return_value="Original forwarded content")
+    mock_message._body = mock_body
+
+    # Create forward with include_body
+    draft = mock_message.forward(include_body=True)
+    draft._imap = mock_imap  # Inject IMAP for save
+    draft.to("recipient@example.com").subject("Fwd: Test").body("FYI")
+
+    # Save to Drafts
+    await draft.save(folder="Drafts")
+
+    # Verify body_text contains BOTH note AND forwarded content
+    call_args = mock_imap.append_message.call_args
+    saved_body = call_args.kwargs["body_text"]
+
+    assert "FYI" in saved_body
+    assert "---------- Forwarded message ---------" in saved_body
+    assert "Original forwarded content" in saved_body
+
+
+@pytest.mark.asyncio
+async def test_reply_save_vs_send_consistency(mock_imap, mock_smtp, mock_message):
+    """Test AC #3: save() and send() produce identical body for reply with quote."""
+    # Setup mock message with body
+    mock_body = AsyncMock()
+    mock_body.get_text = AsyncMock(return_value="Original text")
+    mock_message._body = mock_body
+
+    # Create reply
+    draft = mock_message.reply(quote=True)
+    draft._imap = mock_imap
+    draft.to("recipient@example.com").subject("Re: Test").body("Response")
+
+    # Save and capture body
+    await draft.save(folder="Drafts")
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+
+    # Send and capture body
+    await draft.send()
+    sent_body = mock_smtp.send_message.call_args.kwargs["body_text"]
+
+    # Bodies should be identical
+    assert saved_body == sent_body
+    assert "Response" in saved_body
+    assert "> Original text" in saved_body
+
+
+@pytest.mark.asyncio
+async def test_forward_save_vs_send_consistency(mock_imap, mock_smtp, mock_message):
+    """Test AC #3: save() and send() produce identical body for forward with body."""
+    # Setup mock message with body
+    mock_body = AsyncMock()
+    mock_body.get_text = AsyncMock(return_value="Forwarded content")
+    mock_message._body = mock_body
+
+    # Create forward
+    draft = mock_message.forward(include_body=True)
+    draft._imap = mock_imap
+    draft.to("recipient@example.com").subject("Fwd: Test").body("Note")
+
+    # Save and capture body
+    await draft.save(folder="Drafts")
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+
+    # Send and capture body
+    await draft.send()
+    sent_body = mock_smtp.send_message.call_args.kwargs["body_text"]
+
+    # Bodies should be identical
+    assert saved_body == sent_body
+    assert "Note" in saved_body
+    assert "Forwarded content" in saved_body
+
+
+@pytest.mark.asyncio
+async def test_no_quote_forward_unchanged_body(mock_imap, mock_smtp):
+    """Test AC #4: Draft with NO quote/forward flags saves user body only."""
+    # Create plain draft (no quote/forward)
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft.to("alice@example.com").subject("Test").body("Just text")
+
+    # Save
+    await draft.save(folder="Drafts")
+
+    # Verify body unchanged (no transformations)
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+    assert saved_body == "Just text"
+
+
+@pytest.mark.asyncio
+async def test_quote_with_missing_reference_message(mock_imap, mock_smtp):
+    """Test AC #5: quote=True with reference_message=None gracefully returns user body."""
+    # Create draft with quote=True but NO reference message
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_sender="me@example.com",
+        quote=True,
+        reference_message=None,  # Missing reference
+    )
+    draft.to("alice@example.com").subject("Test").body("Text")
+
+    # Should not crash
+    await draft.save(folder="Drafts")
+
+    # Body should be unchanged (graceful fallback)
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+    assert saved_body == "Text"
+
+
+@pytest.mark.asyncio
+async def test_forward_with_missing_reference_message(mock_imap, mock_smtp):
+    """Test AC #5: include_body=True with reference_message=None gracefully returns user body."""
+    # Create draft with include_body=True but NO reference message
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_sender="me@example.com",
+        include_body=True,
+        reference_message=None,  # Missing reference
+    )
+    draft.to("alice@example.com").subject("Test").body("Text")
+
+    # Should not crash
+    await draft.save(folder="Drafts")
+
+    # Body should be unchanged (graceful fallback)
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+    assert saved_body == "Text"
+
+
+@pytest.mark.asyncio
+async def test_quote_with_empty_user_body(mock_imap, mock_smtp, mock_message):
+    """Test quote-only draft (no user text) works correctly."""
+    # Setup mock message
+    mock_body = AsyncMock()
+    mock_body.get_text = AsyncMock(return_value="Original")
+    mock_message._body = mock_body
+
+    # Create reply with NO user body
+    draft = mock_message.reply(quote=True)
+    draft._imap = mock_imap
+    draft.to("recipient@example.com").subject("Re: Test")
+    # No .body() call - empty user body
+
+    # Save
+    await draft.save(folder="Drafts")
+
+    # Should contain only quote
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+    assert "> Original" in saved_body
+    assert saved_body.startswith("On ")  # Starts with quote header
+
+
+@pytest.mark.asyncio
+async def test_quote_with_multiline_original(mock_imap, mock_smtp, mock_message):
+    """Test quote logic handles multiline original messages."""
+    # Setup multiline original
+    mock_body = AsyncMock()
+    mock_body.get_text = AsyncMock(return_value="Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
+    mock_message._body = mock_body
+
+    # Create reply
+    draft = mock_message.reply(quote=True)
+    draft._imap = mock_imap
+    draft.to("recipient@example.com").subject("Re: Test").body("Response")
+
+    # Save
+    await draft.save(folder="Drafts")
+
+    # Verify each line prefixed with "> "
+    saved_body = mock_imap.append_message.call_args.kwargs["body_text"]
+    assert "> Line 1" in saved_body
+    assert "> Line 2" in saved_body
+    assert "> Line 3" in saved_body
+    assert "> Line 4" in saved_body
+    assert "> Line 5" in saved_body

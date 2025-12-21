@@ -411,19 +411,35 @@ class Message:
         """
         await self._imap.copy_message(uid=self._uid, from_folder=self._folder, to_folder=folder)
 
-    async def delete(self, permanent: bool = False) -> None:
+    async def delete(self, permanent: bool = False, trash_folder: str | None = None) -> None:
         """Delete message.
 
-        Calls IMAP delete_message to delete or move to trash.
-
         Args:
-            permanent: True = expunge immediately, False = move to trash
+            permanent: True = permanently delete, False = move to trash
+            trash_folder: Required when permanent=False. Folder name for trash.
 
-        Example:
-            >>> await message.delete()  # Move to trash
-            >>> await message.delete(permanent=True)  # Expunge immediately
+        Raises:
+            ValueError: If permanent=False and trash_folder is None
+
+        Examples:
+            >>> # Move to trash
+            >>> await message.delete(trash_folder="INBOX.Trash")
+
+            >>> # Permanent delete
+            >>> await message.delete(permanent=True)
         """
-        await self._imap.delete_message(folder=self._folder, uid=self._uid, permanent=permanent)
+        if permanent:
+            # Permanent delete - call adapter directly
+            await self._imap.delete_message(folder=self._folder, uid=self._uid)
+        else:
+            # Move to trash - validate then call move_message
+            if trash_folder is None:
+                raise ValueError(
+                    "trash_folder parameter required when permanent=False. "
+                    "Specify the trash folder name explicitly, e.g., "
+                    "message.delete(trash_folder='INBOX.Trash')"
+                )
+            await self._imap.move_message(uid=self._uid, from_folder=self._folder, to_folder=trash_folder)
 
     async def mark_deleted(self) -> None:
         """Mark message for deletion (\\Deleted flag, don't expunge).

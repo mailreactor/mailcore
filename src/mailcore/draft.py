@@ -316,6 +316,68 @@ class Draft:
         self._attachments.append(att)
         return self
 
+    async def _build_final_body(self) -> str:
+        """Build final body text including quotes/forwards if configured.
+
+        Materializes quote (reply) and forward body transformations based on
+        _quote, _include_body, and _reference_message settings.
+
+        Returns:
+            Final body text with user content plus materialized quotes/forwards
+
+        Note:
+            - If no quote/forward flags set, returns _body unchanged
+            - Gracefully handles missing reference message (returns _body only)
+            - Called by both save() and send() to ensure consistency
+        """
+        # Start with user's body (or empty string if None)
+        body_text = self._body if self._body is not None else ""
+
+        # Handle quote logic (reply)
+        if self._quote and self._reference_message is not None:
+            # Fetch body from reference message
+            original_text = await self._reference_message.body.get_text()
+            if original_text is not None:
+                # Prepend quoted text
+                from_addr = self._reference_message.from_.to_rfc5322()
+                date_str = self._reference_message.date.strftime("%Y-%m-%d %H:%M")
+                quote_text = f"On {date_str}, {from_addr} wrote:\n"
+                # Quote each line
+                quoted_lines = [f"> {line}" for line in original_text.splitlines()]
+                quote_text += "\n".join(quoted_lines)
+                # Combine with current body
+                if body_text:
+                    body_text = f"{body_text}\n\n{quote_text}"
+                else:
+                    body_text = quote_text
+
+        # Handle forward body logic
+        if self._include_body and self._reference_message is not None:
+            # Fetch body from reference message
+            original_text = await self._reference_message.body.get_text()
+            if original_text is not None:
+                # Format forward header
+                from_addr = self._reference_message.from_.to_rfc5322()
+                date_str = self._reference_message.date.strftime("%Y-%m-%d %H:%M")
+                to_recipients = ", ".join([addr.to_rfc5322() for addr in self._reference_message.to])
+
+                forward_header = (
+                    "\n\n---------- Forwarded message ---------\n"
+                    f"From: {from_addr}\n"
+                    f"Date: {date_str}\n"
+                    f"Subject: {self._reference_message.subject}\n"
+                    f"To: {to_recipients}\n\n"
+                )
+
+                # Combine with user body (if any)
+                if body_text:
+                    body_text = f"{body_text}{forward_header}{original_text}"
+                else:
+                    # No user body - just forward content (strip leading newlines)
+                    body_text = f"{forward_header.lstrip()}{original_text}"
+
+        return body_text
+
     async def save(self, folder: str) -> int:
         """Save draft to IMAP folder without sending.
 
@@ -399,13 +461,16 @@ class Draft:
         # Subject (can be empty for incomplete drafts)
         subject = self._subject if self._subject is not None else ""
 
+        # Build final body with quotes/forwards materialized
+        final_body = await self._build_final_body()
+
         # Append new message with preserved flags
         new_uid = await self._imap.append_message(
             folder=folder,
             from_=from_addr_obj,
             to=to_addrs,
             subject=subject,
-            body_text=self._body,
+            body_text=final_body,
             body_html=self._body_html,
             cc=cc_addrs,
             attachments=self._attachments if self._attachments else None,
@@ -426,7 +491,6 @@ class Draft:
                 await self._imap.delete_message(
                     folder=self._original_message_folder,
                     uid=self._original_message_uid,
-                    permanent=True,
                 )
             except Exception:
                 pass  # Original might already be deleted
@@ -502,49 +566,8 @@ class Draft:
         if self._subject is None:
             raise ValueError("Draft.send() requires 'subject'")
 
-        # Handle quote logic (lazy fetch during send)
-        body_text = self._body if self._body is not None else ""
-        if self._quote and self._reference_message is not None:
-            # Fetch body from reference message
-            original_text = await self._reference_message.body.get_text()
-            if original_text is not None:
-                # Prepend quoted text
-                from_addr = self._reference_message.from_.to_rfc5322()
-                date_str = self._reference_message.date.strftime("%Y-%m-%d %H:%M")
-                quote_text = f"On {date_str}, {from_addr} wrote:\n"
-                # Quote each line
-                quoted_lines = [f"> {line}" for line in original_text.splitlines()]
-                quote_text += "\n".join(quoted_lines)
-                # Combine with current body
-                if body_text:
-                    body_text = f"{body_text}\n\n{quote_text}"
-                else:
-                    body_text = quote_text
-
-        # Handle forward body logic (lazy fetch during send)
-        if self._include_body and self._reference_message is not None:
-            # Fetch body from reference message
-            original_text = await self._reference_message.body.get_text()
-            if original_text is not None:
-                # Format forward header
-                from_addr = self._reference_message.from_.to_rfc5322()
-                date_str = self._reference_message.date.strftime("%Y-%m-%d %H:%M")
-                to_recipients = ", ".join([addr.to_rfc5322() for addr in self._reference_message.to])
-
-                forward_header = (
-                    "\n\n---------- Forwarded message ---------\n"
-                    f"From: {from_addr}\n"
-                    f"Date: {date_str}\n"
-                    f"Subject: {self._reference_message.subject}\n"
-                    f"To: {to_recipients}\n\n"
-                )
-
-                # Combine with user body (if any)
-                if body_text:
-                    body_text = f"{body_text}{forward_header}{original_text}"
-                else:
-                    # No user body - just forward content (strip leading newlines)
-                    body_text = f"{forward_header.lstrip()}{original_text}"
+        # Build final body with quotes/forwards materialized
+        body_text = await self._build_final_body()
 
         # Handle include_attachments logic (lazy fetch during send)
         attachments_to_send = self._attachments.copy()

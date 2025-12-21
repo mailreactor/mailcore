@@ -319,20 +319,11 @@ class MockIMAPConnection(IMAPConnection):
 
             return new_uid
 
-    async def delete_message(self, folder: str, uid: int, permanent: bool = False) -> None:
-        """Delete message (move to Trash or expunge)."""
+    async def delete_message(self, folder: str, uid: int) -> None:
+        """Permanently delete message from folder."""
         async with self._lock:
-            if permanent:
-                # Remove from folder entirely
-                if folder in self._folders:
-                    self._folders[folder] = [m for m in self._folders[folder] if m.uid != uid]
-            else:
-                # Move to Trash
-                if "Trash" not in self._folders:
-                    self._folders["Trash"] = []
-                    self._uid_counters["Trash"] = 1
-
-                await self.move_message(uid, folder, "Trash")
+            if folder in self._folders:
+                self._folders[folder] = [m for m in self._folders[folder] if m.uid != uid]
 
     async def get_folders(self) -> list[FolderInfo]:
         """Get all folders with metadata."""

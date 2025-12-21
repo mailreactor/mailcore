@@ -417,36 +417,48 @@ class Mailbox:
         messages: MessageList | list[Message] | Iterable[Message],
         *,
         permanent: bool = False,
+        trash_folder: str | None = None,
     ) -> None:
         """Delete messages (automatically groups by source folder for efficiency).
 
         Args:
             messages: MessageList, list[Message], or Iterable[Message]
-            permanent: True = expunge immediately, False = move to Trash
+            permanent: True = expunge, False = move to trash
+            trash_folder: Required when permanent=False
+
+        Raises:
+            ValueError: If permanent=False and trash_folder is None
 
         Example:
-            >>> # Move to trash (default)
+            >>> # Move to trash
             >>> old_messages = await inbox.before(date(2024, 1, 1)).list()
-            >>> await mailbox.delete(old_messages)
+            >>> await mailbox.delete(old_messages, trash_folder="INBOX.Trash")
             >>>
             >>> # Permanent delete
             >>> await mailbox.delete(old_messages, permanent=True)
         """
+        if not permanent and trash_folder is None:
+            raise ValueError(
+                "trash_folder parameter required when permanent=False. "
+                "Specify the trash folder name explicitly, e.g., "
+                "mailbox.delete(messages, trash_folder='INBOX.Trash')"
+            )
+
         # Group messages by source folder
         grouped: dict[str, list[int]] = defaultdict(list)
         for msg in messages:
             grouped[msg.folder].append(msg.uid)
 
-        # Execute one IMAP command per source folder
+        # Execute operations
         for source_folder, uids in grouped.items():
             if permanent:
-                # Permanent delete - call delete_message with permanent=True
                 for uid in uids:
-                    await self._imap.delete_message(folder=source_folder, uid=uid, permanent=True)
+                    await self._imap.delete_message(folder=source_folder, uid=uid)
             else:
-                # Move to Trash - call move_message
+                # trash_folder guaranteed non-None by validation above
+                assert trash_folder is not None
                 for uid in uids:
-                    await self._imap.move_message(uid=uid, from_folder=source_folder, to_folder="Trash")
+                    await self._imap.move_message(uid=uid, from_folder=source_folder, to_folder=trash_folder)
 
     async def get(self, message_id: str) -> Message | None:
         """Search all folders for message by Message-ID.

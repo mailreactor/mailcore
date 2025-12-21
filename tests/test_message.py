@@ -204,18 +204,25 @@ async def test_message_copy_to(sample_message, mock_imap):
 
 @pytest.mark.asyncio
 async def test_message_delete_to_trash(sample_message, mock_imap):
-    """Test delete(permanent=False) calls IMAP correctly."""
-    await sample_message.delete(permanent=False)
+    """Test delete(permanent=False) calls move_message."""
+    await sample_message.delete(permanent=False, trash_folder="Trash")
 
-    mock_imap.delete_message.assert_called_once_with(folder="INBOX", uid=42, permanent=False)
+    mock_imap.move_message.assert_called_once_with(uid=42, from_folder="INBOX", to_folder="Trash")
 
 
 @pytest.mark.asyncio
 async def test_message_delete_permanent(sample_message, mock_imap):
-    """Test delete(permanent=True) calls IMAP correctly."""
+    """Test delete(permanent=True) calls delete_message."""
     await sample_message.delete(permanent=True)
 
-    mock_imap.delete_message.assert_called_once_with(folder="INBOX", uid=42, permanent=True)
+    mock_imap.delete_message.assert_called_once_with(folder="INBOX", uid=42)
+
+
+@pytest.mark.asyncio
+async def test_message_delete_without_trash_folder_raises(sample_message, mock_imap):
+    """Test delete(permanent=False) without trash_folder raises ValueError."""
+    with pytest.raises(ValueError, match="trash_folder parameter required"):
+        await sample_message.delete(permanent=False)
 
 
 @pytest.mark.asyncio

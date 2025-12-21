@@ -336,7 +336,7 @@ async def test_delete_non_permanent_moves_to_trash(mailbox: Mailbox, mock_imap: 
         size=1024,
     )
 
-    await mailbox.delete([msg1], permanent=False)
+    await mailbox.delete([msg1], permanent=False, trash_folder="Trash")
 
     mock_imap.move_message.assert_called_once_with(uid=1, from_folder="INBOX", to_folder="Trash")
     mock_imap.delete_message.assert_not_called()
@@ -364,8 +364,32 @@ async def test_delete_permanent_calls_delete_message(mailbox: Mailbox, mock_imap
 
     await mailbox.delete([msg1], permanent=True)
 
-    mock_imap.delete_message.assert_called_once_with(folder="INBOX", uid=1, permanent=True)
+    mock_imap.delete_message.assert_called_once_with(folder="INBOX", uid=1)
     mock_imap.move_message.assert_not_called()
+
+
+# Test: delete without trash_folder raises ValueError
+@pytest.mark.asyncio
+async def test_delete_without_trash_folder_raises(mailbox: Mailbox, mock_imap: IMAPConnection) -> None:
+    """Test delete(permanent=False) without trash_folder raises ValueError."""
+    msg1 = Message(
+        imap=mock_imap,
+        smtp=None,
+        default_sender=None,
+        uid=1,
+        folder="INBOX",
+        message_id="<msg1@example.com>",
+        from_=EmailAddress("sender@example.com"),
+        to=[EmailAddress("recipient@example.com")],
+        cc=[],
+        subject="Message 1",
+        date=datetime.now(),
+        flags=[],
+        size=1024,
+    )
+
+    with pytest.raises(ValueError, match="trash_folder parameter required"):
+        await mailbox.delete([msg1], permanent=False)
 
 
 # Test: get searches all folders for message

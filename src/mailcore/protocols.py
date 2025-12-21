@@ -228,20 +228,27 @@ class IMAPConnection(ABC):
         ...
 
     @abstractmethod
-    async def delete_message(self, folder: str, uid: int, permanent: bool = False) -> None:
-        """Delete message (move to Trash or expunge permanently).
+    async def delete_message(self, folder: str, uid: int) -> None:
+        """Permanently delete message from folder.
 
-        Combines IMAP operations:
-        - permanent=False: SELECT + COPY to Trash + STORE \\Deleted + EXPUNGE
-        - permanent=True: SELECT + STORE \\Deleted + EXPUNGE
+        IMAP operations: SELECT folder + STORE \\Deleted + EXPUNGE
+
+        WARNING: This is permanent deletion - no trash, no recovery.
+        If you want to move to trash first, use move_message() before calling this.
 
         Args:
             folder: Folder name
             uid: Message UID
-            permanent: True = expunge immediately, False = move to Trash
+
+        Raises:
+            IMAPError: If delete operation fails
 
         Example:
-            await imap.delete_message('INBOX', 42, permanent=False)
+            # Move to trash (safe delete)
+            await imap.move_message(42, 'INBOX', 'Trash')
+
+            # Permanent delete (no trash)
+            await imap.delete_message('INBOX', 42)
         """
         ...
 
