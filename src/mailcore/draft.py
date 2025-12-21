@@ -5,7 +5,8 @@ from pathlib import Path
 from mailcore.attachment import Attachment
 from mailcore.email_address import EmailAddress
 from mailcore.message import Message
-from mailcore.protocols import SMTPConnection
+from mailcore.protocols import IMAPConnection, SMTPConnection
+from mailcore.types import MessageFlag
 
 
 class Draft:
@@ -48,24 +49,34 @@ class Draft:
         smtp: SMTPConnection,
         default_sender: str,
         *,
+        imap: IMAPConnection | None = None,
         reference_message: Message | None = None,
         in_reply_to: str | None = None,
         references: list[str] | None = None,
         quote: bool = False,
         include_attachments: bool = False,
         include_body: bool = False,
+        original_message_uid: int | None = None,
+        original_message_folder: str | None = None,
+        original_message_flags: set[MessageFlag] | None = None,
+        original_custom_flags: set[str] | None = None,
     ) -> None:
         """Initialize draft with SMTP connection.
 
         Args:
             smtp: SMTP connection for sending
             default_sender: Default sender email address (REQUIRED)
+            imap: IMAP connection for saving drafts (optional - required for save())
             reference_message: Original message (for reply/forward)
             in_reply_to: Message-ID this replies to (for threading)
             references: Thread chain (list of Message-IDs)
             quote: Include original message quote (for reply - used during send())
             include_attachments: Include original attachments (for forward - used during send())
             include_body: Include original message body (for forward - used during send())
+            original_message_uid: UID of original draft (for edit tracking)
+            original_message_folder: Folder of original draft (for smart replace)
+            original_message_flags: Flags to preserve when saving (for edit)
+            original_custom_flags: Custom flags to preserve when saving (for edit)
 
         Note:
             Not typically instantiated directly - use mailbox.draft(),
@@ -73,6 +84,7 @@ class Draft:
         """
         # Connection
         self._smtp = smtp
+        self._imap = imap
         self._default_sender = default_sender
 
         # Reference message for reply/forward
@@ -82,6 +94,12 @@ class Draft:
         self._quote = quote
         self._include_attachments = include_attachments
         self._include_body = include_body
+
+        # Original message tracking (for edit/save workflow)
+        self._original_message_uid = original_message_uid
+        self._original_message_folder = original_message_folder
+        self._original_message_flags = original_message_flags or set()
+        self._original_custom_flags = original_custom_flags or set()
 
         # Builder state - mutable fields
         self._from: str | None = None
@@ -297,6 +315,131 @@ class Draft:
             )
         self._attachments.append(att)
         return self
+
+    async def save(self, folder: str) -> int:
+        """Save draft to IMAP folder without sending.
+
+        If draft originated from message.edit(), replaces original
+        when saving to same folder (deletes old, keeps new).
+        Preserves flags from original message (except \\Recent).
+
+        Args:
+            folder: Target folder name (must exist)
+
+        Returns:
+            UID of newly saved draft message (positive integer), or 0 if server
+            doesn't support APPENDUID capability. The UID represents the NEW message
+            (after append), not the original (which is deleted on replace).
+
+        Raises:
+            ValueError: If IMAP connection not available or BCC is set
+            FolderNotFoundError: If folder doesn't exist
+
+        Note:
+            - BCC cannot be safely preserved in IMAP (security requirement).
+              Save will raise ValueError if BCC is set. Add BCC when sending instead.
+            - Incomplete drafts allowed: to/subject/body can be empty
+            - Modern IMAP servers (Gmail, Outlook) support APPENDUID and return UID > 0
+            - Legacy servers without APPENDUID return 0 (can't determine UID)
+
+        Examples:
+            >>> # Save new draft
+            >>> draft = mailbox.draft().to('alice').subject('Hi').body('Draft')
+            >>> uid = await draft.save(folder='Drafts')
+
+            >>> # Edit and save (replaces original if same folder)
+            >>> drafts = await mailbox.folders['Drafts'].list()
+            >>> editable = await drafts[0].edit()
+            >>> editable.body('Updated content')
+            >>> uid = await editable.save(folder='Drafts')  # NEW UID, original deleted
+        """
+        # Validate IMAP connection available
+        if self._imap is None:
+            raise ValueError(
+                "Draft.save() requires IMAP connection. Create draft via mailbox.draft() to enable saving."
+            )
+
+        # SECURITY: BCC validation - cannot be safely preserved in IMAP
+        if self._bcc:
+            raise ValueError(
+                "Draft.save() cannot preserve BCC recipients. "
+                "BCC must not appear in saved messages (security requirement). "
+                "Either send draft immediately with .send() or remove BCC before saving. "
+                "Add BCC when loading draft later: draft.to_draft().bcc('email').send()"
+            )
+
+        # Determine flags to preserve
+        flags_to_set = {MessageFlag.DRAFT}  # Always include \Draft
+
+        if self._original_message_flags:
+            # Preserve all flags except \Recent (server-controlled)
+            flags_to_set |= {flag for flag in self._original_message_flags if flag != MessageFlag.RECENT}
+
+        # Preserve custom flags
+        custom_flags_to_set = self._original_custom_flags.copy() if self._original_custom_flags else set()
+
+        # Parse email strings to EmailAddress objects (reuse from send())
+        def parse_email(email_str: str) -> EmailAddress:
+            if "<" in email_str and ">" in email_str:
+                parts = email_str.split("<", 1)
+                name = parts[0].strip()
+                email = parts[1].rstrip(">").strip()
+                return EmailAddress(email, name)
+            else:
+                return EmailAddress(email_str.strip())
+
+        # Convert email strings to EmailAddress objects (handle None for incomplete drafts)
+        to_addrs = [parse_email(email) for email in self._to] if self._to else []
+        cc_addrs = [parse_email(email) for email in self._cc] if self._cc else None
+
+        # Sender address
+        from_email = self._from if self._from is not None else self._default_sender
+        from_addr_obj = parse_email(from_email)
+
+        # Subject (can be empty for incomplete drafts)
+        subject = self._subject if self._subject is not None else ""
+
+        # Append new message with preserved flags
+        new_uid = await self._imap.append_message(
+            folder=folder,
+            from_=from_addr_obj,
+            to=to_addrs,
+            subject=subject,
+            body_text=self._body,
+            body_html=self._body_html,
+            cc=cc_addrs,
+            attachments=self._attachments if self._attachments else None,
+            in_reply_to=self._in_reply_to,
+            references=self._references if self._references else None,
+            flags=flags_to_set,
+            custom_flags=custom_flags_to_set if custom_flags_to_set else None,
+        )
+
+        # If editing same folder, delete original (atomic replace)
+        # Only delete if we have a valid UID (> 0) - servers without APPENDUID return 0
+        if (
+            self._original_message_uid is not None
+            and self._original_message_uid > 0
+            and folder == self._original_message_folder
+        ):
+            try:
+                await self._imap.delete_message(
+                    folder=self._original_message_folder,
+                    uid=self._original_message_uid,
+                    permanent=True,
+                )
+            except Exception:
+                pass  # Original might already be deleted
+
+        # Update tracking for subsequent saves
+        # Note: Always update even if new_uid is 0 (no APPENDUID support)
+        # because the old UID was deleted and is no longer valid
+        self._original_message_uid = new_uid
+        self._original_message_folder = folder
+        self._original_message_flags = flags_to_set
+        self._original_custom_flags = custom_flags_to_set
+
+        return new_uid
 
     async def send(self, **kwargs: str | list[str]) -> str:
         """Send the draft, optionally overriding properties at send time.

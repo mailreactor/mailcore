@@ -2,6 +2,7 @@
 
 import pytest
 
+from mailcore.attachment import Attachment
 from mailcore.email_address import EmailAddress
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.types import FolderInfo, FolderStatus, MessageFlag, SendResult
@@ -97,6 +98,23 @@ async def test_complete_imap_implementation_succeeds() -> None:
 
         async def rename_folder(self, old_name: str, new_name: str) -> FolderInfo:
             return FolderInfo(name=new_name, flags=[], has_children=False)
+
+        async def append_message(
+            self,
+            folder: str,
+            from_: EmailAddress,
+            to: list[EmailAddress],
+            subject: str,
+            body_text: str | None = None,
+            body_html: str | None = None,
+            cc: list[EmailAddress] | None = None,
+            attachments: list[Attachment] | None = None,
+            in_reply_to: str | None = None,
+            references: list[str] | None = None,
+            flags: set[MessageFlag] | None = None,
+            custom_flags: set[str] | None = None,
+        ) -> int:
+            return 1
 
     # Should instantiate without errors
     imap = CompleteIMAPAdapter()

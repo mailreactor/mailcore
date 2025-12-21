@@ -5,7 +5,7 @@ Eliminated 1 duplicate fixture (mock_imap).
 """
 
 from datetime import datetime, timezone
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -830,3 +830,182 @@ def test_message_from_data_smtp_not_none(mock_imap, mock_smtp):
     # Should be able to call reply() immediately (no ValueError)
     draft = message.reply()
     assert draft is not None
+
+
+# Message.edit() tests
+
+
+@pytest.mark.asyncio
+async def test_message_edit_requires_draft_flag(mock_imap, mock_smtp):
+    """Test that edit() validates MessageFlag.DRAFT is present."""
+    from mailcore.types import MessageFlag
+
+    # Sent message (no DRAFT flag)
+    message = Message(
+        imap=mock_imap,
+        smtp=mock_smtp,
+        default_sender="me@example.com",
+        uid=42,
+        folder="Sent",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("me@example.com"),
+        to=[EmailAddress("alice@example.com")],
+        cc=[],
+        subject="Sent Message",
+        date=Mock(),
+        flags={MessageFlag.SEEN},  # No DRAFT flag
+        size=100,
+    )
+
+    with pytest.raises(ValueError, match="Cannot edit message without.*Draft"):
+        await message.edit()
+
+
+@pytest.mark.asyncio
+async def test_message_edit_requires_smtp_connection(mock_imap):
+    """Test that edit() requires SMTP connection."""
+    from mailcore.types import MessageFlag
+
+    message = Message(
+        imap=mock_imap,
+        smtp=None,  # No SMTP
+        default_sender="me@example.com",
+        uid=42,
+        folder="Drafts",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("me@example.com"),
+        to=[EmailAddress("alice@example.com")],
+        cc=[],
+        subject="Draft",
+        date=Mock(),
+        flags={MessageFlag.DRAFT},
+        size=100,
+    )
+
+    with pytest.raises(ValueError, match="SMTP connection not available"):
+        await message.edit()
+
+
+@pytest.mark.asyncio
+async def test_message_edit_populates_draft_fields(mock_imap, mock_smtp):
+    """Test that edit() pre-populates Draft with message fields."""
+    from mailcore.types import MessageFlag
+
+    # Mock body fetching
+    mock_body = Mock()
+    mock_body.get_text = AsyncMock(return_value="Original body text")
+    mock_body.get_html = AsyncMock(return_value="<p>Original body html</p>")
+
+    message = Message(
+        imap=mock_imap,
+        smtp=mock_smtp,
+        default_sender="me@example.com",
+        uid=42,
+        folder="Drafts",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("me@example.com"),
+        to=[EmailAddress("alice@example.com", "Alice")],
+        cc=[EmailAddress("bob@example.com", "Bob")],
+        subject="Draft Subject",
+        date=Mock(),
+        flags={MessageFlag.DRAFT},
+        size=100,
+    )
+    message._body = mock_body
+
+    draft = await message.edit()
+
+    # Verify fields populated
+    assert draft._to == ["Alice <alice@example.com>"]
+    assert draft._cc == ["Bob <bob@example.com>"]
+    assert draft._subject == "Draft Subject"
+    assert draft._body == "Original body text"
+    assert draft._body_html == "<p>Original body html</p>"
+
+
+@pytest.mark.asyncio
+async def test_message_edit_tracks_original_for_replace(mock_imap, mock_smtp):
+    """Test that edit() tracks original UID/folder/flags for smart save."""
+    from mailcore.types import MessageFlag
+
+    mock_body = Mock()
+    mock_body.get_text = AsyncMock(return_value="Text")
+    mock_body.get_html = AsyncMock(return_value=None)
+
+    message = Message(
+        imap=mock_imap,
+        smtp=mock_smtp,
+        default_sender="me@example.com",
+        uid=42,
+        folder="Drafts",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("me@example.com"),
+        to=[EmailAddress("alice@example.com")],
+        cc=[],
+        subject="Draft",
+        date=Mock(),
+        flags={MessageFlag.DRAFT, MessageFlag.SEEN},
+        custom_flags={"$Forwarded"},
+        size=100,
+    )
+    message._body = mock_body
+
+    draft = await message.edit()
+
+    # Verify tracking fields
+    assert draft._original_message_uid == 42
+    assert draft._original_message_folder == "Drafts"
+    assert MessageFlag.DRAFT in draft._original_message_flags
+    assert MessageFlag.SEEN in draft._original_message_flags
+    assert "$Forwarded" in draft._original_custom_flags
+
+
+@pytest.mark.asyncio
+async def test_message_edit_copies_attachments(mock_imap, mock_smtp):
+    """Test that edit() copies attachments from original message."""
+    from mailcore.types import MessageFlag
+
+    mock_body = Mock()
+    mock_body.get_text = AsyncMock(return_value="Text")
+    mock_body.get_html = AsyncMock(return_value=None)
+
+    # Create proper Attachment instances
+    att1 = Attachment(
+        uri="imap://Drafts/42/part/2",
+        filename="file1.pdf",
+        content_type="application/pdf",
+        size=1024,
+        _resolver=Mock(),
+    )
+    att2 = Attachment(
+        uri="imap://Drafts/42/part/3",
+        filename="file2.png",
+        content_type="image/png",
+        size=2048,
+        _resolver=Mock(),
+    )
+
+    message = Message(
+        imap=mock_imap,
+        smtp=mock_smtp,
+        default_sender="me@example.com",
+        uid=42,
+        folder="Drafts",
+        message_id="<msg@example.com>",
+        from_=EmailAddress("me@example.com"),
+        to=[EmailAddress("alice@example.com")],
+        cc=[],
+        subject="Draft",
+        date=Mock(),
+        flags={MessageFlag.DRAFT},
+        size=100,
+        attachments=[att1, att2],
+    )
+    message._body = mock_body
+
+    draft = await message.edit()
+
+    # Verify attachments copied
+    assert len(draft._attachments) == 2
+    assert draft._attachments[0] == att1
+    assert draft._attachments[1] == att2

@@ -207,13 +207,19 @@ class Mailbox:
         """Create new draft message.
 
         Returns:
-            Draft with SMTP connection for building and sending email
+            Draft with SMTP and IMAP connections for building, sending, and saving email
 
         Example:
+            >>> # Compose and send
             >>> draft = mailbox.draft()
             >>> await draft.to('alice@example.com').subject('Hi').body('Hello').send()
+
+            >>> # Save for later
+            >>> draft = mailbox.draft()
+            >>> draft.to('alice@example.com').subject('Hi').body('Draft')
+            >>> uid = await draft.save(folder='Drafts')
         """
-        return Draft(smtp=self._smtp, default_sender=self._default_sender)
+        return Draft(smtp=self._smtp, imap=self._imap, default_sender=self._default_sender)
 
     async def send(
         self,

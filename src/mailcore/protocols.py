@@ -331,6 +331,67 @@ class IMAPConnection(ABC):
         """
         ...
 
+    @abstractmethod
+    async def append_message(
+        self,
+        folder: str,
+        from_: EmailAddress,
+        to: list[EmailAddress],
+        subject: str,
+        body_text: str | None = None,
+        body_html: str | None = None,
+        cc: list[EmailAddress] | None = None,
+        attachments: list[Any] | None = None,  # list[Attachment] but avoiding circular import
+        in_reply_to: str | None = None,
+        references: list[str] | None = None,
+        flags: set[MessageFlag] | None = None,
+        custom_flags: set[str] | None = None,
+    ) -> int:
+        """Append message to IMAP folder.
+
+        Adapter builds RFC 5322 MIME message from domain types.
+        BCC intentionally excluded (security requirement).
+        Preserves both standard and custom flags when provided.
+
+        IMAP operation: SELECT + APPEND
+
+        Args:
+            folder: Folder name
+            from_: Sender address
+            to: Recipients (required)
+            subject: Email subject
+            body_text: Plain text body (optional)
+            body_html: HTML body (optional)
+            cc: CC recipients (optional)
+            attachments: File attachments (optional)
+            in_reply_to: Message-ID this replies to (optional)
+            references: Thread chain (optional)
+            flags: Standard IMAP flags (e.g., {MessageFlag.DRAFT, MessageFlag.SEEN})
+            custom_flags: Custom IMAP keywords (e.g., {'$Forwarded', '$MDNSent'})
+
+        Returns:
+            UID of appended message
+
+        Raises:
+            FolderNotFoundError: If folder doesn't exist
+
+        Note:
+            Consistent with update_message_flags() signature (both support custom flags).
+            Adapter is responsible for building RFC 5322 MIME message.
+
+        Example:
+            uid = await imap.append_message(
+                folder='Drafts',
+                from_=EmailAddress('sender@example.com'),
+                to=[EmailAddress('recipient@example.com')],
+                subject='Draft Message',
+                body_text='Draft content',
+                flags={MessageFlag.DRAFT, MessageFlag.SEEN},
+                custom_flags={'$Forwarded'}
+            )
+        """
+        ...
+
 
 class SMTPConnection(ABC):
     """Abstract SMTP connection interface using mailcore domain types.

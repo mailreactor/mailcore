@@ -516,3 +516,204 @@ def test_draft_repr_long_subject(mock_smtp):
     repr_str = repr(draft)
     assert "..." in repr_str  # Truncated
     assert len(repr_str) < 200  # Reasonable length
+
+
+# Draft.save() tests
+
+
+@pytest.mark.asyncio
+async def test_draft_save_requires_imap_connection(mock_smtp):
+    """Test that save() raises error if IMAP connection not available."""
+    draft = Draft(smtp=mock_smtp, imap=None, default_sender="me@example.com")
+    draft.to("alice@example.com").subject("Test")
+
+    with pytest.raises(ValueError, match="requires IMAP connection"):
+        await draft.save(folder="Drafts")
+
+
+@pytest.mark.asyncio
+async def test_draft_save_allows_empty_draft(mock_smtp, mock_imap):
+    """Test that save() allows incomplete drafts (no to, no subject, no body)."""
+    mock_imap.append_message = AsyncMock(return_value=123)
+
+    # Completely empty draft
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+
+    # Should save without errors
+    uid = await draft.save(folder="Drafts")
+
+    assert uid == 123
+    assert mock_imap.append_message.called
+
+    # Verify empty values passed correctly
+    call_args = mock_imap.append_message.call_args
+    assert call_args.kwargs["to"] == []  # Empty list
+    assert call_args.kwargs["subject"] == ""  # Empty string
+
+
+@pytest.mark.asyncio
+async def test_draft_save_rejects_bcc(mock_smtp, mock_imap):
+    """Test that save() raises clear error if BCC is set (security requirement)."""
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft.to("alice@example.com").subject("Test").bcc("secret@example.com")
+
+    with pytest.raises(ValueError) as exc_info:
+        await draft.save(folder="Drafts")
+
+    error_msg = str(exc_info.value)
+    assert "cannot preserve BCC" in error_msg
+    assert "security" in error_msg
+    assert "send() or remove BCC" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_draft_save_calls_imap_append_message(mock_smtp, mock_imap):
+    """Test that save() calls IMAP append_message with correct parameters."""
+    mock_imap.append_message = AsyncMock(return_value=123)
+
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft.to("alice@example.com").subject("Test Subject").body("Test Body")
+
+    uid = await draft.save(folder="Drafts")
+
+    # Verify IMAP append_message was called
+    assert mock_imap.append_message.called
+    call_args = mock_imap.append_message.call_args
+
+    # Verify UID returned
+    assert uid == 123
+
+    # Verify flags include DRAFT
+    from mailcore.types import MessageFlag
+
+    assert MessageFlag.DRAFT in call_args.kwargs["flags"]
+
+
+@pytest.mark.asyncio
+async def test_draft_save_preserves_flags_when_editing(mock_smtp, mock_imap):
+    """Test that save() preserves flags from original message (except Recent)."""
+    from mailcore.types import MessageFlag
+
+    mock_imap.append_message = AsyncMock(return_value=456)
+    mock_imap.delete_message = AsyncMock()
+
+    # Create draft from edit (with original flags)
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_sender="me@example.com",
+        original_message_uid=42,
+        original_message_folder="Drafts",
+        original_message_flags={MessageFlag.DRAFT, MessageFlag.SEEN, MessageFlag.RECENT},
+        original_custom_flags={"$Forwarded"},
+    )
+    draft.to("alice@example.com").subject("Updated").body("Updated body")
+
+    await draft.save(folder="Drafts")
+
+    call_args = mock_imap.append_message.call_args
+
+    # Verify flags preserved (except RECENT)
+    assert MessageFlag.DRAFT in call_args.kwargs["flags"]
+    assert MessageFlag.SEEN in call_args.kwargs["flags"]
+    assert MessageFlag.RECENT not in call_args.kwargs["flags"]
+
+    # Verify custom flags preserved
+    assert "$Forwarded" in call_args.kwargs["custom_flags"]
+
+
+@pytest.mark.asyncio
+async def test_draft_save_replaces_original_same_folder(mock_smtp, mock_imap):
+    """Test that save() deletes original when saving to same folder."""
+    from mailcore.types import MessageFlag
+
+    mock_imap.append_message = AsyncMock(return_value=456)
+    mock_imap.delete_message = AsyncMock()
+
+    # Create draft from edit
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_sender="me@example.com",
+        original_message_uid=42,
+        original_message_folder="Drafts",
+        original_message_flags={MessageFlag.DRAFT},
+        original_custom_flags=set(),
+    )
+    draft.to("alice@example.com").subject("Updated").body("Updated")
+
+    # Save to same folder
+    await draft.save(folder="Drafts")
+
+    # Verify original deleted
+    assert mock_imap.delete_message.called
+    delete_call = mock_imap.delete_message.call_args
+    assert delete_call.kwargs["folder"] == "Drafts"
+    assert delete_call.kwargs["uid"] == 42
+    assert delete_call.kwargs["permanent"] is True
+
+
+@pytest.mark.asyncio
+async def test_draft_save_keeps_original_different_folder(mock_smtp, mock_imap):
+    """Test that save() keeps original when saving to different folder."""
+    from mailcore.types import MessageFlag
+
+    mock_imap.append_message = AsyncMock(return_value=456)
+    mock_imap.delete_message = AsyncMock()
+
+    # Create draft from edit
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_sender="me@example.com",
+        original_message_uid=42,
+        original_message_folder="Drafts",
+        original_message_flags={MessageFlag.DRAFT},
+        original_custom_flags=set(),
+    )
+    draft.to("alice@example.com").subject("Updated").body("Updated")
+
+    # Save to different folder
+    await draft.save(folder="Archive")
+
+    # Verify original NOT deleted
+    assert not mock_imap.delete_message.called
+
+
+@pytest.mark.asyncio
+async def test_draft_save_handles_no_appenduid(mock_smtp, mock_imap):
+    """Test that save() handles servers without APPENDUID support (returns 0)."""
+    from mailcore.types import MessageFlag
+
+    # Server doesn't support APPENDUID - returns 0
+    mock_imap.append_message = AsyncMock(return_value=0)
+    mock_imap.delete_message = AsyncMock()
+
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_sender="me@example.com",
+        original_message_uid=42,
+        original_message_folder="Drafts",
+        original_message_flags={MessageFlag.DRAFT},
+        original_custom_flags=set(),
+    )
+    draft.to("alice@example.com").subject("Test").body("Body")
+
+    # Save (will delete original but can't get new UID)
+    uid = await draft.save(folder="Drafts")
+
+    # Returns 0 (no APPENDUID)
+    assert uid == 0
+
+    # Original still deleted (replace happened)
+    assert mock_imap.delete_message.called
+
+    # Tracking updated to 0 (original UID 42 no longer valid after delete)
+    assert draft._original_message_uid == 0
+
+    # Second save won't try to delete UID 0 (None check prevents it)
+    mock_imap.delete_message.reset_mock()
+    await draft.save(folder="Drafts")
+    # delete_message not called because original_uid is 0 (falsy, not None)
+    assert not mock_imap.delete_message.called

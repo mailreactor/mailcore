@@ -461,6 +461,7 @@ class Message:
         # Create Draft with reply headers
         draft = Draft(
             smtp=self._smtp,
+            imap=self._imap,
             default_sender=self._default_sender or "",
             reference_message=self,
             in_reply_to=self._message_id,
@@ -506,6 +507,7 @@ class Message:
         # Create Draft with reply headers
         draft = Draft(
             smtp=self._smtp,
+            imap=self._imap,
             default_sender=self._default_sender or "",
             reference_message=self,
             in_reply_to=self._message_id,
@@ -563,6 +565,7 @@ class Message:
         # Create Draft with forward settings
         draft = Draft(
             smtp=self._smtp,
+            imap=self._imap,
             default_sender=self._default_sender or "",
             reference_message=self,
             include_attachments=include_attachments,
@@ -574,6 +577,80 @@ class Message:
             draft.subject(self._subject)
         else:
             draft.subject(f"Fwd: {self._subject}")
+
+        return draft
+
+    async def edit(self) -> "Draft":
+        """Convert message to editable draft.
+
+        Only messages with \\Draft flag can be edited (security requirement).
+        Fetches body immediately (eager loading).
+        Returned draft tracks origin (UID, folder, flags) for smart save behavior.
+
+        Returns:
+            Draft pre-populated with message fields
+
+        Raises:
+            ValueError: If message does not have \\Draft flag or SMTP connection not available
+
+        Note:
+            Only saved drafts can be edited. Sent or received messages cannot be edited
+            (security/safety requirement).
+
+        Examples:
+            >>> # Edit saved draft
+            >>> drafts = await mailbox.folders['Drafts'].list()
+            >>> draft_msg = drafts[0]
+            >>> editable = await draft_msg.edit()
+            >>> editable.body('Updated content')
+            >>> await editable.send()
+
+            >>> # Or save again
+            >>> uid = await editable.save(folder='Drafts')  # Replaces original
+        """
+        # Lazy import to avoid circular import at module level
+        from mailcore.draft import Draft
+
+        # SECURITY: Only allow editing actual drafts
+        if MessageFlag.DRAFT not in self._flags:
+            raise ValueError(
+                "Cannot edit message without \\Draft flag. "
+                "Only saved drafts can be edited (sent/received messages are immutable)."
+            )
+
+        # Require SMTP connection
+        if self._smtp is None:
+            raise ValueError("SMTP connection not available - Message must come from Folder query")
+
+        # Create Draft with origin tracking
+        draft = Draft(
+            smtp=self._smtp,
+            imap=self._imap,
+            default_sender=self._default_sender or "",
+            original_message_uid=self._uid,
+            original_message_folder=self._folder,
+            original_message_flags=self._flags.copy(),
+            original_custom_flags=self._custom_flags.copy(),
+        )
+
+        # Pre-populate: to, cc, subject
+        draft.to([addr.to_rfc5322() for addr in self._to])
+        if self._cc:
+            draft.cc([addr.to_rfc5322() for addr in self._cc])
+        draft.subject(self._subject)
+
+        # Fetch and populate body (eager loading)
+        text = await self.body.get_text()
+        if text:
+            draft.body(text)
+
+        html = await self.body.get_html()
+        if html:
+            draft.body_html(html)
+
+        # Copy attachments
+        for att in self._attachments:
+            draft.attach(att)
 
         return draft
 

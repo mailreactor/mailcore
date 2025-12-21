@@ -437,6 +437,55 @@ class MockIMAPConnection(IMAPConnection):
         self._folders[folder].append(msg)
         return uid
 
+    async def append_message(
+        self,
+        folder: str,
+        from_: EmailAddress,
+        to: list[EmailAddress],
+        subject: str,
+        body_text: str | None = None,
+        body_html: str | None = None,
+        cc: list[EmailAddress] | None = None,
+        attachments: list[Any] | None = None,
+        in_reply_to: str | None = None,
+        references: list[str] | None = None,
+        flags: set[MessageFlag] | None = None,
+        custom_flags: set[str] | None = None,
+    ) -> int:
+        """Append message to folder with specified flags.
+
+        Delegates to _add_message helper with flags support.
+        """
+        # Ensure folder exists
+        if folder not in self._folders:
+            self._folders[folder] = []
+            self._uid_counters[folder] = 1
+
+        uid = self._uid_counters[folder]
+        self._uid_counters[folder] += 1
+
+        # Build combined flags set
+        all_flags = set(flags) if flags else set()
+
+        msg = MockMessage(
+            uid=uid,
+            folder=folder,
+            message_id=f"<msg-{uid}@example.com>",
+            from_=from_,
+            to=to,
+            cc=cc or [],
+            subject=subject,
+            date=datetime.now(timezone.utc),
+            flags=all_flags,
+            custom_flags=custom_flags or set(),
+            body_text=body_text,
+            body_html=body_html,
+            attachments=attachments or [],
+        )
+
+        self._folders[folder].append(msg)
+        return uid
+
 
 class MockSMTPConnection(SMTPConnection):
     """Full mock SMTP connection for E2E tests.
