@@ -173,3 +173,134 @@ def test_query_repr_not() -> None:
     repr_str = repr(q)
     assert "Query(type='not'" in repr_str
     assert "query=" in repr_str
+
+
+# Date filter tests
+
+
+def test_q_since_static_method() -> None:
+    """Verify Q.since() creates SINCE query with DD-Mon-YYYY format."""
+    from datetime import date
+
+    q = Q.since(date(2025, 12, 21))
+    assert q.to_imap_criteria() == ["SINCE", "21-Dec-2025"]
+
+
+def test_q_before_static_method() -> None:
+    """Verify Q.before() creates BEFORE query with DD-Mon-YYYY format."""
+    from datetime import date
+
+    q = Q.before(date(2025, 1, 1))
+    assert q.to_imap_criteria() == ["BEFORE", "01-Jan-2025"]
+
+
+def test_q_on_static_method() -> None:
+    """Verify Q.on() creates ON query with DD-Mon-YYYY format."""
+    from datetime import date
+
+    q = Q.on(date(2025, 12, 21))
+    assert q.to_imap_criteria() == ["ON", "21-Dec-2025"]
+
+
+def test_q_sentsince_static_method() -> None:
+    """Verify Q.sentsince() creates SENTSINCE query."""
+    from datetime import date
+
+    q = Q.sentsince(date(2025, 12, 1))
+    assert q.to_imap_criteria() == ["SENTSINCE", "01-Dec-2025"]
+
+
+def test_q_sentbefore_static_method() -> None:
+    """Verify Q.sentbefore() creates SENTBEFORE query."""
+    from datetime import date
+
+    q = Q.sentbefore(date(2025, 1, 1))
+    assert q.to_imap_criteria() == ["SENTBEFORE", "01-Jan-2025"]
+
+
+# Size filter tests
+
+
+def test_q_larger_static_method() -> None:
+    """Verify Q.larger() creates LARGER query with integer to string conversion."""
+    q = Q.larger(1_000_000)
+    assert q.to_imap_criteria() == ["LARGER", "1000000"]
+
+
+def test_q_smaller_static_method() -> None:
+    """Verify Q.smaller() creates SMALLER query with integer to string conversion."""
+    q = Q.smaller(10_000)
+    assert q.to_imap_criteria() == ["SMALLER", "10000"]
+
+
+# Content filter tests
+
+
+def test_q_text_static_method() -> None:
+    """Verify Q.text() creates TEXT query."""
+    q = Q.text("budget")
+    assert q.to_imap_criteria() == ["TEXT", "budget"]
+
+
+# Address filter tests
+
+
+def test_q_cc_static_method() -> None:
+    """Verify Q.cc() creates CC query."""
+    q = Q.cc("team@example.com")
+    assert q.to_imap_criteria() == ["CC", "team@example.com"]
+
+
+# Flag filter tests
+
+
+def test_q_unanswered_static_method() -> None:
+    """Verify Q.unanswered() creates UNANSWERED query."""
+    q = Q.unanswered()
+    assert q.to_imap_criteria() == ["UNANSWERED"]
+
+
+def test_q_unflagged_static_method() -> None:
+    """Verify Q.unflagged() creates UNFLAGGED query."""
+    q = Q.unflagged()
+    assert q.to_imap_criteria() == ["UNFLAGGED"]
+
+
+# Custom filter tests
+
+
+def test_q_keyword_static_method() -> None:
+    """Verify Q.keyword() creates KEYWORD query."""
+    q = Q.keyword("Important")
+    assert q.to_imap_criteria() == ["KEYWORD", "Important"]
+
+
+def test_q_header_static_method() -> None:
+    """Verify Q.header() creates HEADER query with field and value."""
+    q = Q.header("X-Priority", "1")
+    assert q.to_imap_criteria() == ["HEADER", "X-Priority", "1"]
+
+
+# Complex query tests with new filters
+
+
+def test_q_date_and_size_query() -> None:
+    """Verify complex query with date and size filters."""
+    from datetime import date
+
+    q = Q.since(date(2025, 12, 1)) & Q.larger(100_000)
+    assert q.to_imap_criteria() == ["SINCE", "01-Dec-2025", "LARGER", "100000"]
+
+
+def test_q_multi_criteria_or() -> None:
+    """Verify OR query with different criteria types."""
+    q = Q.from_("alice") | Q.subject("urgent")
+    assert q.to_imap_criteria() == ["OR", "FROM", "alice", "SUBJECT", "urgent"]
+
+
+def test_q_complex_nested_with_new_filters() -> None:
+    """Verify complex nested query: (since date AND larger) OR text search."""
+    from datetime import date
+
+    q = (Q.since(date(2025, 12, 1)) & Q.larger(100_000)) | Q.text("budget")
+    assert q.to_imap_criteria() == ["OR", "SINCE", "01-Dec-2025", "LARGER", "100000", "TEXT", "budget"]

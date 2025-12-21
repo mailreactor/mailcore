@@ -10,6 +10,7 @@ Connection Injection Pattern (from Tech Spec):
 - This enables Message.reply() and Message.forward() operations
 """
 
+import datetime
 from collections.abc import AsyncIterator
 
 from mailcore.message import Message
@@ -73,27 +74,57 @@ class Folder:
         new_folder._query_parts.append(query)
         return new_folder
 
-    def from_(self, address: str) -> "Folder":
-        """Filter by FROM address.
+    def from_(self, address: str | list[str]) -> "Folder":
+        """Filter by FROM address (supports multiple with OR logic).
 
         Args:
-            address: Email address or partial match
+            address: Email address or list of addresses (OR logic)
 
         Returns:
             New Folder instance with filter added
-        """
-        return self._clone_with_query(Query.from_(address))
 
-    def to(self, address: str) -> "Folder":
-        """Filter by TO address.
+        Example:
+            >>> # Single address
+            >>> folder.from_('alice@example.com')
+            >>>
+            >>> # Multiple addresses (OR)
+            >>> folder.from_(['alice@example.com', 'bob@example.com'])
+        """
+        if isinstance(address, str):
+            return self._clone_with_query(Query.from_(address))
+        else:
+            # Multiple addresses - build OR chain
+            queries = [Query.from_(addr) for addr in address]
+            combined = queries[0]
+            for q in queries[1:]:
+                combined = combined | q
+            return self._clone_with_query(combined)
+
+    def to(self, address: str | list[str]) -> "Folder":
+        """Filter by TO address (supports multiple with OR logic).
 
         Args:
-            address: Email address or partial match
+            address: Email address or list of addresses (OR logic)
 
         Returns:
             New Folder instance with filter added
+
+        Example:
+            >>> # Single address
+            >>> folder.to('alice@example.com')
+            >>>
+            >>> # Multiple addresses (OR)
+            >>> folder.to(['alice@example.com', 'bob@example.com'])
         """
-        return self._clone_with_query(Query.to(address))
+        if isinstance(address, str):
+            return self._clone_with_query(Query.to(address))
+        else:
+            # Multiple addresses - build OR chain
+            queries = [Query.to(addr) for addr in address]
+            combined = queries[0]
+            for q in queries[1:]:
+                combined = combined | q
+            return self._clone_with_query(combined)
 
     def subject(self, text: str) -> "Folder":
         """Filter by SUBJECT contains.
@@ -172,6 +203,242 @@ class Folder:
             New Folder instance with filter added
         """
         return self._clone_with_query(Query.recent())
+
+    # Date filters
+
+    def since(self, date: "datetime.date") -> "Folder":
+        """Filter messages on or after date (IMAP internal date).
+
+        Args:
+            date: Date to filter from (inclusive)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> from datetime import date
+            >>> folder.since(date(2025, 12, 1))
+        """
+        return self._clone_with_query(Query.since(date))
+
+    def before(self, date: "datetime.date") -> "Folder":
+        """Filter messages before date (IMAP internal date).
+
+        Args:
+            date: Date to filter before (exclusive)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> from datetime import date
+            >>> folder.before(date.today())
+        """
+        return self._clone_with_query(Query.before(date))
+
+    def on(self, date: "datetime.date") -> "Folder":
+        """Filter messages on specific date (IMAP internal date).
+
+        Args:
+            date: Date to filter on (exact match)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> from datetime import date
+            >>> folder.on(date(2025, 12, 21))
+        """
+        return self._clone_with_query(Query.on(date))
+
+    def sentsince(self, date: "datetime.date") -> "Folder":
+        """Filter messages sent on or after date (IMAP Date header).
+
+        Args:
+            date: Date to filter from (inclusive)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> from datetime import date
+            >>> folder.sentsince(date(2025, 12, 1))
+        """
+        return self._clone_with_query(Query.sentsince(date))
+
+    def sentbefore(self, date: "datetime.date") -> "Folder":
+        """Filter messages sent before date (IMAP Date header).
+
+        Args:
+            date: Date to filter before (exclusive)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> from datetime import date
+            >>> folder.sentbefore(date(2025, 1, 1))
+        """
+        return self._clone_with_query(Query.sentbefore(date))
+
+    # Size filters
+
+    def larger(self, bytes: int) -> "Folder":
+        """Filter messages larger than size in bytes.
+
+        Args:
+            bytes: Minimum size in bytes
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> folder.larger(1_000_000)  # >1MB
+        """
+        return self._clone_with_query(Query.larger(bytes))
+
+    def smaller(self, bytes: int) -> "Folder":
+        """Filter messages smaller than size in bytes.
+
+        Args:
+            bytes: Maximum size in bytes
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> folder.smaller(10_000)  # <10KB
+        """
+        return self._clone_with_query(Query.smaller(bytes))
+
+    # Content filter
+
+    def text(self, text: str) -> "Folder":
+        """Search in subject OR body (IMAP TEXT command).
+
+        Args:
+            text: Text to search for
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> folder.text('budget')
+        """
+        return self._clone_with_query(Query.text(text))
+
+    # Address filter
+
+    def cc(self, email: str | list[str]) -> "Folder":
+        """Filter by CC recipient (supports multiple with OR logic).
+
+        Args:
+            email: Email address or list of addresses (OR logic)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> # Single address
+            >>> folder.cc('team@example.com')
+            >>>
+            >>> # Multiple addresses (OR)
+            >>> folder.cc(['team@example.com', 'manager@example.com'])
+        """
+        if isinstance(email, str):
+            return self._clone_with_query(Query.cc(email))
+        else:
+            # Multiple addresses - build OR chain
+            queries = [Query.cc(addr) for addr in email]
+            combined = queries[0]
+            for q in queries[1:]:
+                combined = combined | q
+            return self._clone_with_query(combined)
+
+    # Flag filters
+
+    def unanswered(self) -> "Folder":
+        """Filter to only unanswered messages (not replied to).
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> folder.unanswered()
+        """
+        return self._clone_with_query(Query.unanswered())
+
+    def unflagged(self) -> "Folder":
+        """Filter to only unflagged messages (not starred).
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> folder.unflagged()
+        """
+        return self._clone_with_query(Query.unflagged())
+
+    # Custom filters
+
+    def keyword(self, flag: str | list[str]) -> "Folder":
+        """Filter by custom IMAP keyword (supports multiple with OR logic).
+
+        Args:
+            flag: Keyword name or list of keywords (OR logic)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> # Single keyword
+            >>> folder.keyword('Important')
+            >>>
+            >>> # Multiple keywords (OR)
+            >>> folder.keyword(['Important', 'FollowUp'])
+        """
+        if isinstance(flag, str):
+            return self._clone_with_query(Query.keyword(flag))
+        else:
+            # Multiple keywords - build OR chain
+            queries = [Query.keyword(kw) for kw in flag]
+            combined = queries[0]
+            for q in queries[1:]:
+                combined = combined | q
+            return self._clone_with_query(combined)
+
+    def header(self, field: str, value: str) -> "Folder":
+        """Filter by arbitrary header field.
+
+        Args:
+            field: Header field name (e.g., 'X-Priority')
+            value: Header field value
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> folder.header('X-Priority', '1')
+        """
+        return self._clone_with_query(Query.header(field, value))
+
+    # Query builder integration
+
+    def query(self, q: Query) -> "Folder":
+        """Apply complex Query expression with boolean operators.
+
+        Args:
+            q: Query expression (use Q builder)
+
+        Returns:
+            New Folder instance with filter added
+
+        Example:
+            >>> from mailcore import Q
+            >>> folder.query(Q.from_('alice') | Q.subject('urgent'))
+            >>> folder.query((Q.from_('alice') | Q.from_('bob')) & Q.unseen())
+        """
+        return self._clone_with_query(q)
 
     async def list(self, limit: int | None = None, offset: int = 0) -> MessageList:
         """Execute query and return messages.

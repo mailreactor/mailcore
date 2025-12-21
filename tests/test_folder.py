@@ -437,3 +437,237 @@ def test_folder_repr_with_filters(mock_imap: AsyncMock, mock_smtp: AsyncMock) ->
     repr_str = repr(filtered)
     assert "Folder('INBOX'" in repr_str
     assert "filters=2" in repr_str
+
+
+# Date filter tests
+
+
+def test_folder_since_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.since() creates date filter."""
+    from datetime import date
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.since(date(2025, 12, 21))
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["SINCE", "21-Dec-2025"]
+
+
+def test_folder_before_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.before() creates date filter."""
+    from datetime import date
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.before(date(2025, 1, 1))
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["BEFORE", "01-Jan-2025"]
+
+
+def test_folder_on_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.on() creates date filter."""
+    from datetime import date
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.on(date(2025, 12, 21))
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["ON", "21-Dec-2025"]
+
+
+def test_folder_sentsince_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.sentsince() creates date filter."""
+    from datetime import date
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.sentsince(date(2025, 12, 1))
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["SENTSINCE", "01-Dec-2025"]
+
+
+def test_folder_sentbefore_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.sentbefore() creates date filter."""
+    from datetime import date
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.sentbefore(date(2025, 1, 1))
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["SENTBEFORE", "01-Jan-2025"]
+
+
+# Size filter tests
+
+
+def test_folder_larger_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.larger() creates size filter."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.larger(1_000_000)
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["LARGER", "1000000"]
+
+
+def test_folder_smaller_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.smaller() creates size filter."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.smaller(10_000)
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["SMALLER", "10000"]
+
+
+# Multi-address filter tests
+
+
+def test_folder_from_single_address(mock_imap, mock_smtp) -> None:
+    """Verify folder.from_() works with single address (backward compatibility)."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.from_("alice@example.com")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["FROM", "alice@example.com"]
+
+
+def test_folder_from_multiple_addresses_or_logic(mock_imap, mock_smtp) -> None:
+    """Verify folder.from_(['a', 'b']) creates OR query."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.from_(["alice@example.com", "bob@example.com"])
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["OR", "FROM", "alice@example.com", "FROM", "bob@example.com"]
+
+
+def test_folder_to_single_address(mock_imap, mock_smtp) -> None:
+    """Verify folder.to() works with single address (backward compatibility)."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.to("alice@example.com")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["TO", "alice@example.com"]
+
+
+def test_folder_to_multiple_addresses_or_logic(mock_imap, mock_smtp) -> None:
+    """Verify folder.to(['a', 'b']) creates OR query."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.to(["alice@example.com", "bob@example.com"])
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["OR", "TO", "alice@example.com", "TO", "bob@example.com"]
+
+
+def test_folder_cc_single_address(mock_imap, mock_smtp) -> None:
+    """Verify folder.cc() works with single address."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.cc("team@example.com")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["CC", "team@example.com"]
+
+
+def test_folder_cc_multiple_addresses_or_logic(mock_imap, mock_smtp) -> None:
+    """Verify folder.cc(['a', 'b']) creates OR query."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.cc(["team@example.com", "manager@example.com"])
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["OR", "CC", "team@example.com", "CC", "manager@example.com"]
+
+
+# Content filter tests
+
+
+def test_folder_text_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.text() creates TEXT search filter."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.text("budget")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["TEXT", "budget"]
+
+
+# Flag filter tests
+
+
+def test_folder_unanswered_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.unanswered() creates UNANSWERED filter."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.unanswered()
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["UNANSWERED"]
+
+
+def test_folder_unflagged_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.unflagged() creates UNFLAGGED filter."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.unflagged()
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["UNFLAGGED"]
+
+
+# Custom filter tests
+
+
+def test_folder_keyword_single(mock_imap, mock_smtp) -> None:
+    """Verify folder.keyword() works with single keyword."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.keyword("Important")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["KEYWORD", "Important"]
+
+
+def test_folder_keyword_multiple_or_logic(mock_imap, mock_smtp) -> None:
+    """Verify folder.keyword(['a', 'b']) creates OR query."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.keyword(["Important", "FollowUp"])
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["OR", "KEYWORD", "Important", "KEYWORD", "FollowUp"]
+
+
+def test_folder_header_filter(mock_imap, mock_smtp) -> None:
+    """Verify folder.header() creates HEADER filter."""
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.header("X-Priority", "1")
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["HEADER", "X-Priority", "1"]
+
+
+# Query method tests
+
+
+def test_folder_query_method(mock_imap, mock_smtp) -> None:
+    """Verify folder.query() accepts Q expression."""
+    from mailcore.query import Q
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    q = Q.from_("alice") | Q.subject("urgent")
+    filtered = folder.query(q)
+    assert len(filtered._query_parts) == 1
+    assert filtered._query_parts[0].to_imap_criteria() == ["OR", "FROM", "alice", "SUBJECT", "urgent"]
+
+
+# Chaining tests with new filters
+
+
+def test_folder_complex_chaining_with_new_filters(mock_imap, mock_smtp) -> None:
+    """Verify complex chaining with date, size, and multi-address filters."""
+    from datetime import date
+
+    folder = Folder(mock_imap, mock_smtp, "INBOX", "sender@example.com")
+
+    filtered = folder.from_(["alice@example.com", "bob@example.com"]).since(date(2025, 12, 1)).larger(1_000_000)
+
+    assert len(filtered._query_parts) == 3
+    # First part: OR of FROM addresses
+    assert filtered._query_parts[0].to_imap_criteria() == ["OR", "FROM", "alice@example.com", "FROM", "bob@example.com"]
+    # Second part: SINCE date
+    assert filtered._query_parts[1].to_imap_criteria() == ["SINCE", "01-Dec-2025"]
+    # Third part: LARGER size
+    assert filtered._query_parts[2].to_imap_criteria() == ["LARGER", "1000000"]

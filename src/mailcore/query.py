@@ -1,5 +1,7 @@
 """Query class for IMAP search criteria with boolean operators."""
 
+import datetime
+
 
 class Query:
     """Boolean query builder for IMAP search with composable conditions.
@@ -273,6 +275,242 @@ class Query:
             Query object for ALL criterion
         """
         return Query(criteria=["ALL"])
+
+    # Date filters
+
+    @staticmethod
+    def since(date: "datetime.date") -> "Query":
+        """Messages on or after date (IMAP internal date).
+
+        Args:
+            date: Date to filter from (inclusive)
+
+        Returns:
+            Query object for SINCE criterion
+
+        Example:
+            >>> from datetime import date
+            >>> Q.since(date(2025, 12, 21))
+            Query(type='since', value='21-Dec-2025')
+        """
+
+        date_str = date.strftime("%d-%b-%Y")
+        return Query(criteria=["SINCE", date_str])
+
+    @staticmethod
+    def before(date: "datetime.date") -> "Query":
+        """Messages before date (IMAP internal date).
+
+        Args:
+            date: Date to filter before (exclusive)
+
+        Returns:
+            Query object for BEFORE criterion
+
+        Example:
+            >>> from datetime import date
+            >>> Q.before(date(2025, 1, 1))
+            Query(type='before', value='01-Jan-2025')
+        """
+
+        date_str = date.strftime("%d-%b-%Y")
+        return Query(criteria=["BEFORE", date_str])
+
+    @staticmethod
+    def on(date: "datetime.date") -> "Query":
+        """Messages on specific date (IMAP internal date).
+
+        Args:
+            date: Date to filter on (exact match)
+
+        Returns:
+            Query object for ON criterion
+
+        Example:
+            >>> from datetime import date
+            >>> Q.on(date(2025, 12, 21))
+            Query(type='on', value='21-Dec-2025')
+        """
+
+        date_str = date.strftime("%d-%b-%Y")
+        return Query(criteria=["ON", date_str])
+
+    @staticmethod
+    def sentsince(date: "datetime.date") -> "Query":
+        """Messages sent on or after date (IMAP Date header).
+
+        Args:
+            date: Date to filter from (inclusive)
+
+        Returns:
+            Query object for SENTSINCE criterion
+
+        Example:
+            >>> from datetime import date
+            >>> Q.sentsince(date(2025, 12, 1))
+            Query(type='sentsince', value='01-Dec-2025')
+        """
+
+        date_str = date.strftime("%d-%b-%Y")
+        return Query(criteria=["SENTSINCE", date_str])
+
+    @staticmethod
+    def sentbefore(date: "datetime.date") -> "Query":
+        """Messages sent before date (IMAP Date header).
+
+        Args:
+            date: Date to filter before (exclusive)
+
+        Returns:
+            Query object for SENTBEFORE criterion
+
+        Example:
+            >>> from datetime import date
+            >>> Q.sentbefore(date(2025, 1, 1))
+            Query(type='sentbefore', value='01-Jan-2025')
+        """
+
+        date_str = date.strftime("%d-%b-%Y")
+        return Query(criteria=["SENTBEFORE", date_str])
+
+    # Size filters
+
+    @staticmethod
+    def larger(bytes: int) -> "Query":
+        """Messages larger than size in bytes.
+
+        Args:
+            bytes: Minimum size in bytes
+
+        Returns:
+            Query object for LARGER criterion
+
+        Example:
+            >>> Q.larger(1_000_000)  # >1MB
+            Query(type='larger', value='1000000')
+        """
+        return Query(criteria=["LARGER", str(bytes)])
+
+    @staticmethod
+    def smaller(bytes: int) -> "Query":
+        """Messages smaller than size in bytes.
+
+        Args:
+            bytes: Maximum size in bytes
+
+        Returns:
+            Query object for SMALLER criterion
+
+        Example:
+            >>> Q.smaller(10_000)  # <10KB
+            Query(type='smaller', value='10000')
+        """
+        return Query(criteria=["SMALLER", str(bytes)])
+
+    # Content filters
+
+    @staticmethod
+    def text(text: str) -> "Query":
+        """Search in subject OR body (IMAP TEXT command).
+
+        Args:
+            text: Text to search for
+
+        Returns:
+            Query object for TEXT criterion
+
+        Example:
+            >>> Q.text('budget')
+            Query(type='text', value='budget')
+        """
+        return Query(criteria=["TEXT", text])
+
+    # Address filters
+
+    @staticmethod
+    def cc(email: str) -> "Query":
+        """Filter by CC recipient (single value).
+
+        Args:
+            email: Email address or partial match
+
+        Returns:
+            Query object for CC criterion
+
+        Note:
+            For multiple CC addresses with OR logic, use Folder.cc(['a', 'b'])
+
+        Example:
+            >>> Q.cc('team@example.com')
+            Query(type='cc', value='team@example.com')
+        """
+        return Query(criteria=["CC", email])
+
+    # Flag filters
+
+    @staticmethod
+    def unanswered() -> "Query":
+        """Messages without \\Answered flag (not replied to).
+
+        Returns:
+            Query object for UNANSWERED criterion
+
+        Example:
+            >>> Q.unanswered()
+            Query(type='unanswered')
+        """
+        return Query(criteria=["UNANSWERED"])
+
+    @staticmethod
+    def unflagged() -> "Query":
+        """Messages without \\Flagged flag (not starred).
+
+        Returns:
+            Query object for UNFLAGGED criterion
+
+        Example:
+            >>> Q.unflagged()
+            Query(type='unflagged')
+        """
+        return Query(criteria=["UNFLAGGED"])
+
+    # Custom filters
+
+    @staticmethod
+    def keyword(flag: str) -> "Query":
+        """Filter by custom IMAP keyword (single value).
+
+        Args:
+            flag: Custom keyword name
+
+        Returns:
+            Query object for KEYWORD criterion
+
+        Note:
+            For multiple keywords with OR logic, use Folder.keyword(['a', 'b'])
+
+        Example:
+            >>> Q.keyword('Important')
+            Query(type='keyword', value='Important')
+        """
+        return Query(criteria=["KEYWORD", flag])
+
+    @staticmethod
+    def header(field: str, value: str) -> "Query":
+        """Filter by arbitrary header field.
+
+        Args:
+            field: Header field name (e.g., 'X-Priority')
+            value: Header field value
+
+        Returns:
+            Query object for HEADER criterion
+
+        Example:
+            >>> Q.header('X-Priority', '1')
+            Query(type='header', value='X-Priority: 1')
+        """
+        return Query(criteria=["HEADER", field, value])
 
     def __repr__(self) -> str:
         """Developer-friendly representation showing query type.
