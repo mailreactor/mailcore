@@ -1,5 +1,9 @@
 # mailcore
 
+[![PyPI](https://img.shields.io/pypi/v/mailcore)](https://pypi.org/project/mailcore/)
+[![Python Version](https://img.shields.io/pypi/pyversions/mailcore)](https://pypi.org/project/mailcore/)
+[![License](https://img.shields.io/pypi/l/mailcore)](https://github.com/mailreactor/mailcore/blob/main/LICENSE)
+
 A Python email library designed for intuitive email operations.
 
 mailcore enables developers to work with email using natural, chainable methods:
