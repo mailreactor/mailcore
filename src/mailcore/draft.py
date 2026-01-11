@@ -6,7 +6,7 @@ from mailcore.attachment import Attachment
 from mailcore.email_address import EmailAddress
 from mailcore.message import Message
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import MessageFlag
+from mailcore.types import MessageFlag, SendResult
 
 
 class Draft:
@@ -505,7 +505,7 @@ class Draft:
 
         return new_uid
 
-    async def send(self, **kwargs: str | list[str]) -> str:
+    async def send(self, **kwargs: str | list[str]) -> "SendResult":
         """Send the draft, optionally overriding properties at send time.
 
         Kwargs are applied by calling the corresponding Draft builder methods
@@ -522,20 +522,26 @@ class Draft:
             body_html (str) - HTML version, overwrites
 
         Returns:
-            Message-ID of sent message
+            SendResult with message_id, accepted recipients, and rejected recipients
 
         Raises:
             ValueError: If required fields missing (to, subject, body/body_html)
 
         Examples:
             >>> # Basic send
-            >>> message_id = await draft.send()
+            >>> result = await draft.send()
+            >>> result.message_id
+            '<abc123@example.com>'
+            >>> result.accepted
+            ['alice@example.com']
+            >>> result.rejected
+            {}
 
             >>> # Override properties at send time
-            >>> message_id = await draft.send(cc='manager@example.com')
+            >>> result = await draft.send(cc='manager@example.com')
 
             >>> # Add multiple overrides
-            >>> message_id = await draft.send(
+            >>> result = await draft.send(
             ...     cc='team@example.com',
             ...     bcc='archive@example.com'
             ... )
@@ -615,7 +621,7 @@ class Draft:
             references=self._references if self._references else None,
         )
 
-        return result.message_id
+        return result  # Return full SendResult with message_id, accepted, rejected
 
     def __repr__(self) -> str:
         """Developer-friendly representation showing composition state.

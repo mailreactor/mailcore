@@ -91,7 +91,7 @@ def create_test_attachment(filename: str, content: bytes, content_type: str = "a
 async def test_e2e_send_email_plain_text(mailbox, smtp):
     """E2E: Send plain text email via mailbox.draft()."""
     # Compose and send
-    message_id = await mailbox.draft().to("alice@example.com").subject("Test Email").body("Hello World").send()
+    result = await mailbox.draft().to("alice@example.com").subject("Test Email").body("Hello World").send()
 
     # Verify sent via mock SMTP
     assert len(smtp._sent_messages) == 1
@@ -103,14 +103,14 @@ async def test_e2e_send_email_plain_text(mailbox, smtp):
     assert sent["body_html"] is None
 
     # Verify message_id format
-    assert message_id.startswith("<")
-    assert message_id.endswith("@mock.localhost>")
+    assert result.message_id.startswith("<")
+    assert result.message_id.endswith("@mock.localhost>")
 
 
 @pytest.mark.asyncio
 async def test_e2e_send_email_with_html(mailbox, smtp):
     """E2E: Send email with both plain text and HTML body."""
-    message_id = (
+    result = (
         await mailbox.draft()
         .to("bob@example.com")
         .subject("HTML Email")
@@ -125,7 +125,7 @@ async def test_e2e_send_email_with_html(mailbox, smtp):
 
     assert sent["body_text"] == "Plain text version"
     assert sent["body_html"] == "<p>HTML version</p>"
-    assert message_id == sent["message_id"]
+    assert result.message_id == sent["message_id"]
 
 
 @pytest.mark.asyncio

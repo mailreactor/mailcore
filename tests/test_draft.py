@@ -214,13 +214,15 @@ async def test_send_calls_smtp_connection(mock_smtp):
     draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
     draft.to("alice@example.com").subject("Test").body("Hello World")
 
-    message_id = await draft.send()
+    result = await draft.send()
 
     # Verify send was called
     mock_smtp.send_message.assert_called_once()
 
-    # Check message_id returned
-    assert message_id == "<sent-123@example.com>"
+    # Check SendResult returned
+    assert result.message_id == "<sent-123@example.com>"
+    assert result.accepted == ["alice@example.com"]
+    assert result.rejected == {}
 
 
 @pytest.mark.asyncio

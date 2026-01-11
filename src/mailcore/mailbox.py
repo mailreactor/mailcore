@@ -22,6 +22,7 @@ from mailcore.folder import Folder
 from mailcore.message import Message
 from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
+from mailcore.types import SendResult
 
 
 class FolderDict:
@@ -230,7 +231,7 @@ class Mailbox:
         body_html: str | None = None,
         cc: str | list[str] | None = None,
         bcc: str | list[str] | None = None,
-    ) -> str:
+    ) -> "SendResult":
         """Compose and send email in one call (shortcut).
 
         Args:
@@ -242,17 +243,21 @@ class Mailbox:
             bcc: BCC recipient(s) (optional)
 
         Returns:
-            Message-ID of sent message
+            SendResult with message_id, accepted recipients, and rejected recipients
 
         Raises:
             ValueError: If required fields missing or invalid
 
         Example:
-            >>> message_id = await mailbox.send(
+            >>> result = await mailbox.send(
             ...     to='alice@example.com',
             ...     subject='Hello',
             ...     body='World'
             ... )
+            >>> result.message_id
+            '<abc123@example.com>'
+            >>> result.accepted
+            ['alice@example.com']
         """
         # Create draft and apply fields
         draft = self.draft()

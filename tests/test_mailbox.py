@@ -160,9 +160,9 @@ async def test_send_composes_and_sends_in_one_call(mailbox: Mailbox, mock_smtp: 
         rejected={},
     )
 
-    message_id = await mailbox.send(to="alice@example.com", subject="Hello", body="World")
+    result = await mailbox.send(to="alice@example.com", subject="Hello", body="World")
 
-    assert message_id == "<msg-123@example.com>"
+    assert result.message_id == "<msg-123@example.com>"
     mock_smtp.send_message.assert_called_once()
 
 
@@ -178,7 +178,7 @@ async def test_send_with_all_parameters(mailbox: Mailbox, mock_smtp: SMTPConnect
         rejected={},
     )
 
-    message_id = await mailbox.send(
+    result = await mailbox.send(
         to=["alice@example.com", "bob@example.com"],
         cc="manager@example.com",
         bcc="archive@example.com",
@@ -187,7 +187,7 @@ async def test_send_with_all_parameters(mailbox: Mailbox, mock_smtp: SMTPConnect
         body_html="<h1>HTML version</h1>",
     )
 
-    assert message_id == "<msg-123@example.com>"
+    assert result.message_id == "<msg-123@example.com>"
     mock_smtp.send_message.assert_called_once()
 
 
