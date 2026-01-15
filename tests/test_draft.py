@@ -26,7 +26,7 @@ def mock_message(mock_smtp):
     msg = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender="sender@example.com",  # Add default sender for reply/forward
+        default_from="sender@example.com",  # Add default sender for reply/forward
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -49,7 +49,7 @@ def test_draft_initialization(mock_smtp):
     ref_msg = Mock()
     draft = Draft(
         smtp=mock_smtp,
-        default_sender="test@example.com",
+        default_from="test@example.com",
         reference_message=ref_msg,
         in_reply_to="<msg-123@example.com>",
         references=["<msg-1@example.com>", "<msg-2@example.com>"],
@@ -58,7 +58,7 @@ def test_draft_initialization(mock_smtp):
     )
 
     assert draft._smtp == mock_smtp
-    assert draft._default_sender == "test@example.com"
+    assert draft._default_from == "test@example.com"
     assert draft._reference_message == ref_msg
     assert draft._in_reply_to == "<msg-123@example.com>"
     assert draft._references == ["<msg-1@example.com>", "<msg-2@example.com>"]
@@ -68,7 +68,7 @@ def test_draft_initialization(mock_smtp):
 
 def test_to_overwrites_previous(mock_smtp):
     """Test calling to() twice overwrites previous value."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.to("alice@example.com")
     assert draft._to == ["alice@example.com"]
 
@@ -78,7 +78,7 @@ def test_to_overwrites_previous(mock_smtp):
 
 def test_to_accepts_string_or_list(mock_smtp):
     """Test to() handles both str and list[str]."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
 
     # String input
     draft.to("alice@example.com")
@@ -91,7 +91,7 @@ def test_to_accepts_string_or_list(mock_smtp):
 
 def test_cc_overwrites_previous(mock_smtp):
     """Test calling cc() twice overwrites previous value."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.cc("alice@example.com")
     assert draft._cc == ["alice@example.com"]
 
@@ -101,7 +101,7 @@ def test_cc_overwrites_previous(mock_smtp):
 
 def test_bcc_overwrites_previous(mock_smtp):
     """Test calling bcc() twice overwrites previous value."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.bcc("archive@example.com")
     assert draft._bcc == ["archive@example.com"]
 
@@ -111,7 +111,7 @@ def test_bcc_overwrites_previous(mock_smtp):
 
 def test_subject_overwrites_previous(mock_smtp):
     """Test calling subject() twice overwrites previous value."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.subject("First Subject")
     assert draft._subject == "First Subject"
 
@@ -121,7 +121,7 @@ def test_subject_overwrites_previous(mock_smtp):
 
 def test_body_overwrites_previous(mock_smtp):
     """Test calling body() twice overwrites previous value."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.body("First body")
     assert draft._body == "First body"
 
@@ -131,7 +131,7 @@ def test_body_overwrites_previous(mock_smtp):
 
 def test_body_html_overwrites_previous(mock_smtp):
     """Test calling body_html() twice overwrites previous value."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.body_html("<p>First</p>")
     assert draft._body_html == "<p>First</p>"
 
@@ -141,7 +141,7 @@ def test_body_html_overwrites_previous(mock_smtp):
 
 def test_attach_appends_to_list(mock_smtp):
     """Test calling attach() multiple times appends to list."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
 
     att1 = Attachment(uri="file:///tmp/file1.pdf", filename="file1.pdf")
     att2 = Attachment(uri="file:///tmp/file2.pdf", filename="file2.pdf")
@@ -161,7 +161,7 @@ def test_attach_from_file_creates_attachment(mock_smtp, tmp_path):
     test_file = tmp_path / "report.pdf"
     test_file.write_bytes(b"fake pdf content")
 
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.attach(str(test_file))
 
     assert len(draft._attachments) == 1
@@ -171,7 +171,7 @@ def test_attach_from_file_creates_attachment(mock_smtp, tmp_path):
 
 def test_attach_from_url_creates_attachment(mock_smtp):
     """Test attach(url) creates Attachment from URL."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.attach("https://example.com/chart.png", filename="chart.png")
 
     assert len(draft._attachments) == 1
@@ -181,7 +181,7 @@ def test_attach_from_url_creates_attachment(mock_smtp):
 
 def test_attach_existing_attachment(mock_smtp):
     """Test attach(Attachment) appends directly."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     att = Attachment(uri="imap://INBOX/42/part/2", filename="document.pdf", size=1024, content_type="application/pdf")
 
     draft.attach(att)
@@ -192,7 +192,7 @@ def test_attach_existing_attachment(mock_smtp):
 
 def test_builder_methods_return_self(mock_smtp):
     """Test all builder methods return self for chaining."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
 
     # Chain all methods
     result = (
@@ -211,7 +211,7 @@ def test_builder_methods_return_self(mock_smtp):
 @pytest.mark.asyncio
 async def test_send_calls_smtp_connection(mock_smtp):
     """Test send() calls smtp.send_message() with correct parameters."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.to("alice@example.com").subject("Test").body("Hello World")
 
     result = await draft.send()
@@ -228,7 +228,7 @@ async def test_send_calls_smtp_connection(mock_smtp):
 @pytest.mark.asyncio
 async def test_send_requires_to_and_subject(mock_smtp):
     """Test send() raises ValueError if to or subject missing."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
 
     # Missing to
     draft.subject("Test").body("Hello")
@@ -236,7 +236,7 @@ async def test_send_requires_to_and_subject(mock_smtp):
         await draft.send()
 
     # Missing subject
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.to("alice@example.com").body("Hello")
     with pytest.raises(ValueError, match="requires 'subject'"):
         await draft.send()
@@ -245,7 +245,7 @@ async def test_send_requires_to_and_subject(mock_smtp):
 @pytest.mark.asyncio
 async def test_send_allows_empty_body(mock_smtp):
     """Test send() allows empty body (e.g., attachment-only emails)."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.to("alice@example.com").subject("Test")
 
     # Send without body or body_html (should succeed with empty body)
@@ -261,7 +261,7 @@ async def test_send_allows_empty_body(mock_smtp):
 @pytest.mark.asyncio
 async def test_send_with_kwargs_overrides(mock_smtp):
     """Test send(to='...', cc='...') applies kwargs before sending."""
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com")
     draft.to("alice@example.com").subject("Test").body("Hello")
 
     # Override cc at send time
@@ -283,7 +283,7 @@ async def test_send_with_quote_fetches_body(mock_smtp, mock_message):
     mock_message._body = mock_body
 
     # Create reply draft with quote
-    draft = Draft(smtp=mock_smtp, default_sender="test@example.com", reference_message=mock_message, quote=True)
+    draft = Draft(smtp=mock_smtp, default_from="test@example.com", reference_message=mock_message, quote=True)
     draft.to("alice@example.com").subject("Re: Test").body("My reply")
 
     await draft.send()
@@ -313,7 +313,7 @@ async def test_send_with_attachments_fetches_content(mock_smtp, mock_message):
     # Create forward draft with include_attachments
     draft = Draft(
         smtp=mock_smtp,
-        default_sender="test@example.com",
+        default_from="test@example.com",
         reference_message=mock_message,
         include_attachments=True,
     )
@@ -346,7 +346,7 @@ async def test_send_with_forward_body_fetches_original(mock_smtp, mock_message):
     # Create forward draft with include_body
     draft = Draft(
         smtp=mock_smtp,
-        default_sender="test@example.com",
+        default_from="test@example.com",
         reference_message=mock_message,
         include_body=True,
     )
@@ -379,7 +379,7 @@ async def test_forward_body_prepends_to_user_body(mock_smtp, mock_message):
     # Create forward draft with user body
     draft = Draft(
         smtp=mock_smtp,
-        default_sender="test@example.com",
+        default_from="test@example.com",
         reference_message=mock_message,
         include_body=True,
     )
@@ -411,7 +411,7 @@ async def test_forward_without_body_skips_fetch(mock_smtp, mock_message):
     # Create forward draft with include_body=False
     draft = Draft(
         smtp=mock_smtp,
-        default_sender="test@example.com",
+        default_from="test@example.com",
         reference_message=mock_message,
         include_body=False,
     )
@@ -429,19 +429,19 @@ async def test_forward_without_body_skips_fetch(mock_smtp, mock_message):
     assert "---------- Forwarded message ---------" not in body_text
 
 
-# Story 3.14: Draft default_sender and from_() tests
+# Story 3.14: Draft default_from and from_() tests
 
 
-def test_draft_requires_default_sender(mock_smtp: SMTPConnection) -> None:
-    """Test Draft raises TypeError when default_sender not provided."""
-    with pytest.raises(TypeError, match="missing 1 required positional argument: 'default_sender'"):
+def test_draft_requires_default_from(mock_smtp: SMTPConnection) -> None:
+    """Test Draft raises TypeError when default_from not provided."""
+    with pytest.raises(TypeError, match="missing 1 required positional argument: 'default_from'"):
         Draft(smtp=mock_smtp)  # type: ignore  # Intentionally missing parameter
 
 
 @pytest.mark.asyncio
 async def test_draft_from_override(mock_smtp: SMTPConnection) -> None:
-    """Test Draft.from_() override takes precedence over default_sender."""
-    draft = Draft(smtp=mock_smtp, default_sender="default@example.com")
+    """Test Draft.from_() override takes precedence over default_from."""
+    draft = Draft(smtp=mock_smtp, default_from="default@example.com")
     draft.from_("override@example.com").to("recipient@example.com").subject("Test").body("Test")
 
     await draft.send()
@@ -454,14 +454,14 @@ async def test_draft_from_override(mock_smtp: SMTPConnection) -> None:
 
 
 @pytest.mark.asyncio
-async def test_draft_uses_default_sender(mock_smtp: SMTPConnection) -> None:
-    """Test Draft uses default_sender when no from_() override."""
-    draft = Draft(smtp=mock_smtp, default_sender="default@example.com")
+async def test_draft_uses_default_from(mock_smtp: SMTPConnection) -> None:
+    """Test Draft uses default_from when no from_() override."""
+    draft = Draft(smtp=mock_smtp, default_from="default@example.com")
     draft.to("recipient@example.com").subject("Test").body("Test")
 
     await draft.send()
 
-    # Verify smtp.send_message called with default_sender
+    # Verify smtp.send_message called with default_from
     mock_smtp.send_message.assert_called_once()
     call_args = mock_smtp.send_message.call_args
     from_addr = call_args.kwargs["from_"]
@@ -471,7 +471,7 @@ async def test_draft_uses_default_sender(mock_smtp: SMTPConnection) -> None:
 @pytest.mark.asyncio
 async def test_draft_send_with_correct_from_address(mock_smtp: SMTPConnection) -> None:
     """Integration test: verify from_ parameter passed to smtp.send_message."""
-    draft = Draft(smtp=mock_smtp, default_sender="sender@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="sender@example.com")
     draft.to("recipient@example.com").subject("Test").body("Hello")
 
     await draft.send()
@@ -487,7 +487,7 @@ async def test_draft_send_with_correct_from_address(mock_smtp: SMTPConnection) -
 
 def test_draft_repr_minimal(mock_smtp):
     """Verify Draft repr with minimal fields."""
-    draft = Draft(smtp=mock_smtp, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="me@example.com")
     draft.to("alice@example.com").subject("Hello")
 
     repr_str = repr(draft)
@@ -500,7 +500,7 @@ def test_draft_repr_minimal(mock_smtp):
 
 def test_draft_repr_with_body_and_attachments(mock_smtp):
     """Verify Draft repr shows body and attachment presence."""
-    draft = Draft(smtp=mock_smtp, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="me@example.com")
     draft.to("alice@example.com").subject("Report").body("Some text")
     draft._attachments = [Mock(), Mock()]
 
@@ -512,7 +512,7 @@ def test_draft_repr_with_body_and_attachments(mock_smtp):
 def test_draft_repr_long_subject(mock_smtp):
     """Verify Draft repr truncates long subject."""
     long_subject = "A" * 60  # 60 characters
-    draft = Draft(smtp=mock_smtp, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, default_from="me@example.com")
     draft.subject(long_subject)
 
     repr_str = repr(draft)
@@ -526,7 +526,7 @@ def test_draft_repr_long_subject(mock_smtp):
 @pytest.mark.asyncio
 async def test_draft_save_requires_imap_connection(mock_smtp):
     """Test that save() raises error if IMAP connection not available."""
-    draft = Draft(smtp=mock_smtp, imap=None, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, imap=None, default_from="me@example.com")
     draft.to("alice@example.com").subject("Test")
 
     with pytest.raises(ValueError, match="requires IMAP connection"):
@@ -539,7 +539,7 @@ async def test_draft_save_allows_empty_draft(mock_smtp, mock_imap):
     mock_imap.append_message = AsyncMock(return_value=123)
 
     # Completely empty draft
-    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
 
     # Should save without errors
     uid = await draft.save(folder="Drafts")
@@ -556,7 +556,7 @@ async def test_draft_save_allows_empty_draft(mock_smtp, mock_imap):
 @pytest.mark.asyncio
 async def test_draft_save_rejects_bcc(mock_smtp, mock_imap):
     """Test that save() raises clear error if BCC is set (security requirement)."""
-    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
     draft.to("alice@example.com").subject("Test").bcc("secret@example.com")
 
     with pytest.raises(ValueError) as exc_info:
@@ -573,7 +573,7 @@ async def test_draft_save_calls_imap_append_message(mock_smtp, mock_imap):
     """Test that save() calls IMAP append_message with correct parameters."""
     mock_imap.append_message = AsyncMock(return_value=123)
 
-    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
     draft.to("alice@example.com").subject("Test Subject").body("Test Body")
 
     uid = await draft.save(folder="Drafts")
@@ -603,7 +603,7 @@ async def test_draft_save_preserves_flags_when_editing(mock_smtp, mock_imap):
     draft = Draft(
         smtp=mock_smtp,
         imap=mock_imap,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         original_message_uid=42,
         original_message_folder="Drafts",
         original_message_flags={MessageFlag.DRAFT, MessageFlag.SEEN, MessageFlag.RECENT},
@@ -636,7 +636,7 @@ async def test_draft_save_replaces_original_same_folder(mock_smtp, mock_imap):
     draft = Draft(
         smtp=mock_smtp,
         imap=mock_imap,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         original_message_uid=42,
         original_message_folder="Drafts",
         original_message_flags={MessageFlag.DRAFT},
@@ -666,7 +666,7 @@ async def test_draft_save_keeps_original_different_folder(mock_smtp, mock_imap):
     draft = Draft(
         smtp=mock_smtp,
         imap=mock_imap,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         original_message_uid=42,
         original_message_folder="Drafts",
         original_message_flags={MessageFlag.DRAFT},
@@ -693,7 +693,7 @@ async def test_draft_save_handles_no_appenduid(mock_smtp, mock_imap):
     draft = Draft(
         smtp=mock_smtp,
         imap=mock_imap,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         original_message_uid=42,
         original_message_folder="Drafts",
         original_message_flags={MessageFlag.DRAFT},
@@ -833,7 +833,7 @@ async def test_forward_save_vs_send_consistency(mock_imap, mock_smtp, mock_messa
 async def test_no_quote_forward_unchanged_body(mock_imap, mock_smtp):
     """Test AC #4: Draft with NO quote/forward flags saves user body only."""
     # Create plain draft (no quote/forward)
-    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_sender="me@example.com")
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
     draft.to("alice@example.com").subject("Test").body("Just text")
 
     # Save
@@ -851,7 +851,7 @@ async def test_quote_with_missing_reference_message(mock_imap, mock_smtp):
     draft = Draft(
         smtp=mock_smtp,
         imap=mock_imap,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         quote=True,
         reference_message=None,  # Missing reference
     )
@@ -872,7 +872,7 @@ async def test_forward_with_missing_reference_message(mock_imap, mock_smtp):
     draft = Draft(
         smtp=mock_smtp,
         imap=mock_imap,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         include_body=True,
         reference_message=None,  # Missing reference
     )

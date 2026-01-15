@@ -566,6 +566,13 @@ class MockSMTPConnection(SMTPConnection):
         attachments: list[Attachment] | None = None,
         in_reply_to: str | None = None,
         references: list[str] | None = None,
+        reply_to: list[EmailAddress] | None = None,
+        sender: EmailAddress | None = None,
+        priority: str | None = None,
+        disposition_notification_to: str | None = None,
+        notify: str | None = None,
+        dsn_return: str | None = None,
+        dsn_envelope_id: str | None = None,
     ) -> SendResult:
         """Send email message."""
         # Generate message ID
@@ -594,6 +601,13 @@ class MockSMTPConnection(SMTPConnection):
             "attachments": attachment_data,
             "in_reply_to": in_reply_to,
             "references": references or [],
+            "reply_to": reply_to or [],
+            "sender": sender,
+            "priority": priority,
+            "disposition_notification_to": disposition_notification_to,
+            "notify": notify,
+            "dsn_return": dsn_return,
+            "dsn_envelope_id": dsn_envelope_id,
         }
 
         self._sent_messages.append(sent)

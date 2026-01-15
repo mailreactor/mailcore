@@ -27,7 +27,7 @@ class Folder:
     Injects SMTP connection into messages for reply/forward operations.
 
     Example:
-        >>> inbox = Folder(imap=imap_adapter, smtp=smtp_adapter, name='INBOX', default_sender='me@example.com')
+        >>> inbox = Folder(imap=imap_adapter, smtp=smtp_adapter, name='INBOX', default_from='me@example.com')
         >>> inbox  # REPL-friendly repr
         Folder('INBOX')
         >>>
@@ -45,19 +45,19 @@ class Folder:
         >>> reports = await alice_messages.subject('report').list()
     """
 
-    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection, name: str, default_sender: str) -> None:
+    def __init__(self, imap: IMAPConnection, smtp: SMTPConnection, name: str, default_from: str) -> None:
         """Initialize folder with IMAP and SMTP connections.
 
         Args:
             imap: IMAP connection adapter
             smtp: SMTP connection adapter
             name: Folder name (e.g., "INBOX", "Sent")
-            default_sender: Default sender email address for message composition
+            default_from: Default sender email address for message composition
         """
         self._imap = imap
         self._smtp = smtp
         self._name = name
-        self._default_sender = default_sender
+        self._default_from = default_from
         self._query_parts: list[Query] = []
 
     def _clone_with_query(self, query: Query) -> "Folder":
@@ -69,7 +69,7 @@ class Folder:
         Returns:
             New Folder instance with query added
         """
-        new_folder = Folder(self._imap, self._smtp, self._name, self._default_sender)
+        new_folder = Folder(self._imap, self._smtp, self._name, self._default_from)
         new_folder._query_parts = self._query_parts.copy()
         new_folder._query_parts.append(query)
         return new_folder
@@ -496,7 +496,7 @@ class Folder:
 
         # Convert MessageData DTOs to Message entities
         messages = [
-            Message.from_data(msg_data, self._imap, self._smtp, self._default_sender) for msg_data in data.messages
+            Message.from_data(msg_data, self._imap, self._smtp, self._default_from) for msg_data in data.messages
         ]
 
         # Create MessageList with entities

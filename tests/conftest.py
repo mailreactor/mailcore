@@ -112,7 +112,7 @@ def mock_smtp():
     smtp.send_message.return_value = SendResult(
         message_id="<sent-123@example.com>", accepted=["alice@example.com"], rejected={}
     )
-    # Story 3.14: Add username property for default_sender validation
+    # Story 3.14: Add username property for default_from validation
     smtp.username = "user@example.com"
     return smtp
 
@@ -188,7 +188,7 @@ def create_mock_message(
     return Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=uid,
         folder=folder,
         message_id=message_id,

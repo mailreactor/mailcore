@@ -66,6 +66,57 @@ class MessageFlag(Enum):
             return None
 
 
+class Priority(Enum):
+    """Email priority levels.
+
+    Enumeration of email priority levels as defined in RFC 2156 and related standards.
+    Maps to three header formats for maximum client compatibility:
+    - X-Priority: 1 (highest) to 5 (lowest)
+    - Importance: high, normal, low
+    - Priority: urgent, normal, non-urgent
+
+    Values:
+        HIGHEST: Highest priority (X-Priority: 1)
+        HIGH: High priority (X-Priority: 2)
+        NORMAL: Normal priority (X-Priority: 3, default)
+        LOW: Low priority (X-Priority: 4)
+        LOWEST: Lowest priority (X-Priority: 5)
+
+    Example:
+        >>> Priority.HIGHEST
+        <Priority.HIGHEST: 'highest'>
+        >>> Priority.NORMAL.value
+        'normal'
+    """
+
+    HIGHEST = "highest"
+    HIGH = "high"
+    NORMAL = "normal"
+    LOW = "low"
+    LOWEST = "lowest"
+
+
+class DSNReturn(Enum):
+    """DSN return content options (RFC 3461).
+
+    Enumeration of DSN (Delivery Status Notification) return content options.
+    Controls what content is returned in bounce/delivery failure messages.
+
+    Values:
+        FULL: Return full message in bounce (large, complete debugging info)
+        HEADERS: Return headers only in bounce (default, saves bandwidth)
+
+    Example:
+        >>> DSNReturn.HEADERS
+        <DSNReturn.HEADERS: 'headers'>
+        >>> DSNReturn.FULL.value
+        'full'
+    """
+
+    FULL = "full"
+    HEADERS = "headers"
+
+
 @dataclass
 class FolderInfo:
     """Folder metadata from IMAP LIST.

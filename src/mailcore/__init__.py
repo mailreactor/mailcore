@@ -18,11 +18,13 @@ from mailcore.message_list import MessageList
 from mailcore.protocols import IMAPConnection, SMTPConnection
 from mailcore.query import Q, Query
 from mailcore.types import (
+    DSNReturn,
     FolderInfo,
     FolderStatus,
     MessageData,
     MessageFlag,
     MessageListData,
+    Priority,
     SendResult,
 )
 
@@ -41,6 +43,8 @@ __all__ = [
     "Q",
     "EmailAddress",
     "MessageFlag",
+    "Priority",
+    "DSNReturn",
     "MessageList",
     "MessageData",
     "MessageListData",

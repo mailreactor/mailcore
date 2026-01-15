@@ -25,7 +25,7 @@ def sample_message(mock_imap):
     return Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<msg-123@example.com>",
@@ -85,7 +85,7 @@ def test_message_is_reply_computed(mock_imap):
     reply_msg = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -104,7 +104,7 @@ def test_message_is_reply_computed(mock_imap):
     new_msg = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=2,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -255,7 +255,7 @@ def test_message_accepts_attachments_parameter(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -287,7 +287,7 @@ def test_message_attachments_property(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -327,7 +327,7 @@ def test_message_has_attachments_computed(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -347,7 +347,7 @@ def test_message_has_attachments_computed(mock_imap):
     message_inline_only = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=43,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -373,7 +373,7 @@ def test_message_attachment_count(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -399,7 +399,7 @@ def test_message_inline_count(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<msg@example.com>",
@@ -424,7 +424,7 @@ def test_message_reply_creates_draft(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -453,7 +453,7 @@ def test_message_reply_sets_in_reply_to(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -477,7 +477,7 @@ def test_message_reply_sets_references(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -502,7 +502,7 @@ def test_message_reply_prefixes_subject(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -524,7 +524,7 @@ def test_message_reply_prefixes_subject(mock_imap, mock_smtp):
     message2 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=43,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -547,7 +547,7 @@ def test_message_reply_requires_smtp(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -570,7 +570,7 @@ def test_message_reply_all_includes_all_recipients(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -603,7 +603,7 @@ def test_message_forward_creates_draft(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -631,7 +631,7 @@ def test_message_forward_prefixes_subject(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -653,7 +653,7 @@ def test_message_forward_prefixes_subject(mock_imap, mock_smtp):
     message2 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=43,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -676,7 +676,7 @@ def test_message_forward_requires_smtp(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -702,7 +702,7 @@ def test_message_forward_includes_body_by_default(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -715,7 +715,7 @@ def test_message_forward_includes_body_by_default(mock_imap, mock_smtp):
         size=100,
     )
     message._smtp = mock_smtp
-    message._default_sender = "me@example.com"
+    message._default_from = "me@example.com"
 
     draft = message.forward()
 
@@ -727,7 +727,7 @@ def test_message_forward_without_body(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="INBOX",
         message_id="<original@example.com>",
@@ -740,7 +740,7 @@ def test_message_forward_without_body(mock_imap, mock_smtp):
         size=100,
     )
     message._smtp = mock_smtp
-    message._default_sender = "me@example.com"
+    message._default_from = "me@example.com"
 
     draft = message.forward(include_body=False)
 
@@ -810,7 +810,7 @@ def test_message_from_data_injects_imap_and_smtp(mock_imap, mock_smtp):
 
     assert message._imap is mock_imap
     assert message._smtp is mock_smtp
-    assert message._default_sender == "me@example.com"
+    assert message._default_from == "me@example.com"
 
 
 def test_message_from_data_smtp_not_none(mock_imap, mock_smtp):
@@ -851,7 +851,7 @@ async def test_message_edit_requires_draft_flag(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=mock_smtp,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         uid=42,
         folder="Sent",
         message_id="<msg@example.com>",
@@ -876,7 +876,7 @@ async def test_message_edit_requires_smtp_connection(mock_imap):
     message = Message(
         imap=mock_imap,
         smtp=None,  # No SMTP
-        default_sender="me@example.com",
+        default_from="me@example.com",
         uid=42,
         folder="Drafts",
         message_id="<msg@example.com>",
@@ -906,7 +906,7 @@ async def test_message_edit_populates_draft_fields(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=mock_smtp,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         uid=42,
         folder="Drafts",
         message_id="<msg@example.com>",
@@ -942,7 +942,7 @@ async def test_message_edit_tracks_original_for_replace(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=mock_smtp,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         uid=42,
         folder="Drafts",
         message_id="<msg@example.com>",
@@ -995,7 +995,7 @@ async def test_message_edit_copies_attachments(mock_imap, mock_smtp):
     message = Message(
         imap=mock_imap,
         smtp=mock_smtp,
-        default_sender="me@example.com",
+        default_from="me@example.com",
         uid=42,
         folder="Drafts",
         message_id="<msg@example.com>",

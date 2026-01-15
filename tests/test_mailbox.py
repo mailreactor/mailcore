@@ -208,7 +208,7 @@ async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     msg1 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -223,7 +223,7 @@ async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     msg2 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=2,
         folder="INBOX",
         message_id="<msg2@example.com>",
@@ -238,7 +238,7 @@ async def test_move_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     msg3 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=10,
         folder="Archive",
         message_id="<msg3@example.com>",
@@ -266,7 +266,7 @@ async def test_move_accepts_message_list(mailbox: Mailbox, mock_imap: IMAPConnec
     msg1 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -298,7 +298,7 @@ async def test_copy_groups_by_folder_and_calls_imap(mailbox: Mailbox, mock_imap:
     msg1 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -323,7 +323,7 @@ async def test_delete_non_permanent_moves_to_trash(mailbox: Mailbox, mock_imap: 
     msg1 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -349,7 +349,7 @@ async def test_delete_permanent_calls_delete_message(mailbox: Mailbox, mock_imap
     msg1 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -375,7 +375,7 @@ async def test_delete_without_trash_folder_raises(mailbox: Mailbox, mock_imap: I
     msg1 = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=1,
         folder="INBOX",
         message_id="<msg1@example.com>",
@@ -408,7 +408,7 @@ async def test_get_searches_all_folders_for_message(
     target_message = Message(
         imap=mock_imap,
         smtp=None,
-        default_sender=None,
+        default_from=None,
         uid=42,
         folder="Sent",
         message_id="<msg-123@example.com>",
@@ -456,7 +456,7 @@ async def test_get_returns_none_if_not_found(mailbox: Mailbox, mock_imap: IMAPCo
 # Test: FolderDict initialization
 def test_folder_dict_initialization(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
     """Test FolderDict stores connections."""
-    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_sender="test@example.com")
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_from="test@example.com")
 
     assert folder_dict._imap is mock_imap
     assert folder_dict._smtp is mock_smtp
@@ -465,7 +465,7 @@ def test_folder_dict_initialization(mock_imap: IMAPConnection, mock_smtp: SMTPCo
 # Test: FolderDict __getitem__ creates Folder
 def test_folder_dict_getitem_creates_folder(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
     """Test FolderDict['Name'] creates Folder with connections."""
-    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_sender="test@example.com")
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_from="test@example.com")
 
     folder = folder_dict["Archive"]
 
@@ -478,7 +478,7 @@ def test_folder_dict_getitem_creates_folder(mock_imap: IMAPConnection, mock_smtp
 # Test: FolderDict no caching
 def test_folder_dict_no_caching(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
     """Test FolderDict returns new instance every time (no caching)."""
-    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_sender="test@example.com")
+    folder_dict = FolderDict(imap=mock_imap, smtp=mock_smtp, default_from="test@example.com")
 
     folder1 = folder_dict["Archive"]
     folder2 = folder_dict["Archive"]
@@ -486,7 +486,7 @@ def test_folder_dict_no_caching(mock_imap: IMAPConnection, mock_smtp: SMTPConnec
     assert folder1 is not folder2  # Different instances
 
 
-# Story 3.14: default_sender validation tests
+# Story 3.14: default_from validation tests
 
 
 def test_mailbox_auto_detects_email_username(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
@@ -494,34 +494,34 @@ def test_mailbox_auto_detects_email_username(mock_imap: IMAPConnection, mock_smt
     mock_smtp.username = "user@gmail.com"
     mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp)
 
-    assert mailbox._default_sender == "user@gmail.com"
+    assert mailbox._default_from == "user@gmail.com"
 
 
 def test_mailbox_rejects_non_email_username(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
-    """Test Mailbox raises ValueError when smtp.username is not email and no default_sender provided."""
+    """Test Mailbox raises ValueError when smtp.username is not email and no default_from provided."""
     mock_smtp.username = "john.smith"
 
     with pytest.raises(ValueError, match="Cannot use SMTP username"):
         Mailbox(imap=mock_imap, smtp=mock_smtp)
 
 
-def test_mailbox_accepts_valid_default_sender(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
-    """Test Mailbox accepts explicit default_sender parameter."""
+def test_mailbox_accepts_valid_default_from(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test Mailbox accepts explicit default_from parameter."""
     mock_smtp.username = "john.smith"
-    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="me@example.com")
+    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp, default_from="me@example.com")
 
-    assert mailbox._default_sender == "me@example.com"
+    assert mailbox._default_from == "me@example.com"
 
 
-def test_mailbox_rejects_invalid_default_sender(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
-    """Test Mailbox raises ValueError when default_sender is invalid."""
-    with pytest.raises(ValueError, match="Invalid default_sender"):
-        Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="invalid")
+def test_mailbox_rejects_invalid_default_from(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
+    """Test Mailbox raises ValueError when default_from is invalid."""
+    with pytest.raises(ValueError, match="Invalid default_from"):
+        Mailbox(imap=mock_imap, smtp=mock_smtp, default_from="invalid")
 
 
 def test_mailbox_repr(mock_imap: IMAPConnection, mock_smtp: SMTPConnection) -> None:
-    """Verify Mailbox repr shows default_sender."""
+    """Verify Mailbox repr shows default_from."""
     mock_smtp.username = "user@example.com"
-    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp, default_sender="me@example.com")
+    mailbox = Mailbox(imap=mock_imap, smtp=mock_smtp, default_from="me@example.com")
 
-    assert repr(mailbox) == "Mailbox(default_sender='me@example.com')"
+    assert repr(mailbox) == "Mailbox(default_from='me@example.com')"

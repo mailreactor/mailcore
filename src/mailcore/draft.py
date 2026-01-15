@@ -6,7 +6,7 @@ from mailcore.attachment import Attachment
 from mailcore.email_address import EmailAddress
 from mailcore.message import Message
 from mailcore.protocols import IMAPConnection, SMTPConnection
-from mailcore.types import MessageFlag, SendResult
+from mailcore.types import DSNReturn, MessageFlag, Priority, SendResult
 
 
 class Draft:
@@ -33,7 +33,7 @@ class Draft:
 
     Example:
         >>> # Created by mailbox.draft()
-        >>> draft = Draft(smtp=smtp_connection, default_sender='me@example.com')
+        >>> draft = Draft(smtp=smtp_connection, default_from='me@example.com')
         >>> draft.to('alice@example.com').subject('Hi').body('Hello')
         >>> draft  # REPL-friendly repr
         Draft(to=['alice@example.com'], subject='Hi', body=True, attachments=0)
@@ -47,7 +47,7 @@ class Draft:
     def __init__(
         self,
         smtp: SMTPConnection,
-        default_sender: str,
+        default_from: str,
         *,
         imap: IMAPConnection | None = None,
         reference_message: Message | None = None,
@@ -65,7 +65,7 @@ class Draft:
 
         Args:
             smtp: SMTP connection for sending
-            default_sender: Default sender email address (REQUIRED)
+            default_from: Default FROM header email address (REQUIRED)
             imap: IMAP connection for saving drafts (optional - required for save())
             reference_message: Original message (for reply/forward)
             in_reply_to: Message-ID this replies to (for threading)
@@ -85,7 +85,7 @@ class Draft:
         # Connection
         self._smtp = smtp
         self._imap = imap
-        self._default_sender = default_sender
+        self._default_from = default_from
 
         # Reference message for reply/forward
         self._reference_message = reference_message
@@ -110,6 +110,16 @@ class Draft:
         self._body: str | None = None
         self._body_html: str | None = None
         self._attachments: list[Attachment] = []
+
+        # Header fields (Story 3.34 - Standard Email Headers)
+        self._reply_to: list[str] | None = None  # RFC 5322 allows multiple
+        self._request_read_receipt: bool = False  # Flag: read receipt requested?
+        self._read_receipt_to: str | None = None  # MDN email (None = resolve to From at send time)
+        self._request_delivery_receipt: bool = False  # DSN - notify flag
+        self._delivery_receipt_return: str | None = None  # DSN return content (DSNReturn.value)
+        self._delivery_receipt_envelope_id: str | None = None  # DSN envelope ID (ENVID)
+        self._priority: str | None = None  # Priority.value ('highest', 'high', 'normal', 'low', 'lowest')
+        self._sender: str | None = None  # RFC 5322 Sender header (transmitter, not author)
 
     def to(self, email: str | list[str]) -> "Draft":
         """Set recipient(s). Overwrites previous value.
@@ -316,6 +326,155 @@ class Draft:
         self._attachments.append(att)
         return self
 
+    def reply_to(self, email: str | list[str]) -> "Draft":
+        """Set Reply-To header. Overwrites previous value.
+
+        RFC 5322 allows multiple Reply-To addresses. When recipient replies,
+        their client will send to these addresses instead of From.
+
+        Args:
+            email: Single email or list of emails (validated at send time)
+
+        Returns:
+            Self for chaining
+
+        Examples:
+            >>> draft.reply_to('support@example.com')
+            >>> draft.reply_to(['team@example.com', 'manager@example.com'])
+        """
+        if isinstance(email, str):
+            self._reply_to = [email]
+        else:
+            self._reply_to = email
+        return self
+
+    def request_read_receipt(self, email: str | None = None) -> "Draft":
+        """Request read receipt (MDN - Message Disposition Notification).
+
+        Sets Disposition-Notification-To header per RFC 3798.
+        Recipient's email client will prompt to send read receipt when message is opened.
+
+        Args:
+            email: Email for receipt (None = use From address, resolved at send time)
+
+        Returns:
+            Self for chaining
+
+        Note:
+            Email defaults to From address at send() time, so builder order doesn't matter:
+            - draft.request_read_receipt().from_('alice@') works
+            - draft.from_('alice@').request_read_receipt() works
+
+        Examples:
+            >>> draft.request_read_receipt()  # Uses From address
+            >>> draft.request_read_receipt('receipts@example.com')  # Explicit email
+        """
+        self._request_read_receipt = True
+        self._read_receipt_to = email  # None = resolve to From at send()
+        return self
+
+    def request_delivery_receipt(
+        self,
+        return_content: DSNReturn | str = DSNReturn.HEADERS,
+        envelope_id: str | None = None,
+    ) -> "Draft":
+        """Request delivery receipt (DSN - Delivery Status Notification).
+
+        Sets SMTP NOTIFY, RET, and ENVID parameters per RFC 3461. SMTP server will send
+        delivery status notifications (success/failure/delay) to envelope sender (From).
+
+        Args:
+            return_content: What to return in bounce - DSNReturn.FULL or DSNReturn.HEADERS (default).
+                           Can also pass string "full" or "headers" with validation.
+            envelope_id: Optional tracking identifier returned in bounces (for correlation
+                        with your tracking system, e.g., order IDs, ticket numbers)
+
+        Returns:
+            Self for chaining
+
+        Note:
+            Unlike read receipts, delivery receipts are sent by SMTP servers,
+            not by recipient's email client. Notification goes to From address automatically.
+
+        Example:
+            >>> draft.request_delivery_receipt()  # Headers only
+            >>> draft.request_delivery_receipt(DSNReturn.FULL)  # Full message
+            >>> draft.request_delivery_receipt(envelope_id="order-123")  # With tracking
+        """
+        self._request_delivery_receipt = True
+
+        # Validate return_content (fail-fast like priority())
+        if isinstance(return_content, DSNReturn):
+            self._delivery_receipt_return = return_content.value
+        else:
+            try:
+                DSNReturn(return_content)
+                self._delivery_receipt_return = return_content
+            except ValueError:
+                valid = [r.value for r in DSNReturn]
+                raise ValueError(
+                    f"Invalid DSN return content: {return_content!r}. Must be one of: {', '.join(valid)}"
+                ) from None
+
+        self._delivery_receipt_envelope_id = envelope_id
+        return self
+
+    def priority(self, level: Priority | str) -> "Draft":
+        """Set email priority level. Overwrites previous value.
+
+        Sets priority headers (X-Priority, Importance, Priority) for maximum client compatibility.
+        Most email clients display priority indicator in inbox.
+
+        Args:
+            level: Priority level (Priority enum or string value)
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            ValueError: If string value is not a valid Priority level
+
+        Examples:
+            >>> from mailcore import Priority
+            >>> draft.priority(Priority.HIGH)
+            >>> draft.priority('high')  # String validated immediately
+            >>> draft.priority('urgent')  # ValueError: invalid priority
+        """
+        if isinstance(level, Priority):
+            self._priority = level.value
+        else:
+            # Validate string is valid Priority value (fail fast)
+            try:
+                Priority(level)  # Raises ValueError if invalid
+                self._priority = level
+            except ValueError:
+                valid = [p.value for p in Priority]
+                raise ValueError(f"Invalid priority: {level!r}. Must be one of: {', '.join(valid)}") from None
+        return self
+
+    def sender(self, email: str) -> "Draft":
+        """Set Sender header (RFC 5322 Section 3.6.2).
+
+        Sender header indicates the agent who transmitted the message (different from author).
+        Rare use case: secretary sending on behalf of manager.
+
+        Args:
+            email: Sender email (can be "Name <email@example.com>" format, validated at send time)
+
+        Returns:
+            Self for chaining
+
+        Note:
+            From header = author (who wrote it)
+            Sender header = transmitter (who sent it)
+            Most emails don't need Sender header.
+
+        Example:
+            >>> draft.from_('manager@company.com').sender('secretary@company.com')
+        """
+        self._sender = email
+        return self
+
     async def _build_final_body(self) -> str:
         """Build final body text including quotes/forwards if configured.
 
@@ -454,8 +613,8 @@ class Draft:
         to_addrs = [parse_email(email) for email in self._to] if self._to else []
         cc_addrs = [parse_email(email) for email in self._cc] if self._cc else None
 
-        # Sender address
-        from_email = self._from if self._from is not None else self._default_sender
+        # From address
+        from_email = self._from if self._from is not None else self._default_from
         from_addr_obj = parse_email(from_email)
 
         # Subject (can be empty for incomplete drafts)
@@ -603,9 +762,41 @@ class Draft:
         cc_addrs = [parse_email(email) for email in self._cc] if self._cc else None
         bcc_addrs = [parse_email(email) for email in self._bcc] if self._bcc else None
 
-        # Sender address: explicit override > default_sender (REQUIRED parameter)
-        from_email = self._from if self._from is not None else self._default_sender
+        # From address: explicit override > default_from (REQUIRED parameter)
+        from_email = self._from if self._from is not None else self._default_from
         from_addr_obj = parse_email(from_email)
+
+        # Process new headers (Story 3.34)
+
+        # Reply-To: parse list of emails to EmailAddress objects
+        reply_to_addrs: list[EmailAddress] | None = None
+        if self._reply_to:
+            reply_to_addrs = [parse_email(email) for email in self._reply_to]
+
+        # Sender: parse to EmailAddress
+        sender_addr: EmailAddress | None = None
+        if self._sender:
+            sender_addr = parse_email(self._sender)
+
+        # Read receipt (MDN): resolve to From if not explicit
+        disposition_notification_to: str | None = None
+        if self._request_read_receipt:
+            receipt_email = self._read_receipt_to if self._read_receipt_to else from_email
+            # Extract just the email address (no name)
+            receipt_addr = parse_email(receipt_email)
+            disposition_notification_to = receipt_addr.email
+
+        # Delivery receipt (DSN): build notify, return_content, envelope_id parameters
+        notify: str | None = None
+        dsn_return: str | None = None
+        dsn_envelope_id: str | None = None
+        if self._request_delivery_receipt:
+            notify = "SUCCESS,FAILURE,DELAY"
+            dsn_return = self._delivery_receipt_return  # "full" or "headers"
+            dsn_envelope_id = self._delivery_receipt_envelope_id  # User's tracking ID
+
+        # Priority: already validated, just pass value
+        priority: str | None = self._priority
 
         # Call SMTP connection
         result = await self._smtp.send_message(
@@ -619,6 +810,13 @@ class Draft:
             attachments=attachments_to_send if attachments_to_send else None,
             in_reply_to=self._in_reply_to,
             references=self._references if self._references else None,
+            reply_to=reply_to_addrs,
+            sender=sender_addr,
+            priority=priority,
+            disposition_notification_to=disposition_notification_to,
+            notify=notify,
+            dsn_return=dsn_return,
+            dsn_envelope_id=dsn_envelope_id,
         )
 
         return result  # Return full SendResult with message_id, accepted, rejected
@@ -630,7 +828,7 @@ class Draft:
             Draft(to=[...], subject='...', body=True/False, attachments=N)
 
         Example:
-            >>> draft = Draft(smtp=smtp_conn, default_sender='me@example.com')
+            >>> draft = Draft(smtp=smtp_conn, default_from='me@example.com')
             >>> draft.to('alice@example.com').subject('Hello')
             >>> draft
             Draft(to=['alice@example.com'], subject='Hello', body=False, attachments=0)

@@ -31,7 +31,7 @@ class Message:
         >>> message = Message(
         ...     imap=mock_imap,
         ...     smtp=mock_smtp,
-        ...     default_sender='me@example.com',
+        ...     default_from='me@example.com',
         ...     uid=42,
         ...     folder='INBOX',
         ...     message_id='<msg-123@example.com>',
@@ -53,7 +53,7 @@ class Message:
         self,
         imap: IMAPConnection,
         smtp: SMTPConnection | None,
-        default_sender: str | None,
+        default_from: str | None,
         uid: int,
         folder: str,
         message_id: str,
@@ -74,7 +74,7 @@ class Message:
         Args:
             imap: IMAP connection for operations (mark_read, move_to, etc.)
             smtp: SMTP connection for compose operations (reply, forward) - None if not available
-            default_sender: Default sender email for compose operations - None if not available
+            default_from: Default sender email for compose operations - None if not available
             uid: IMAP UID (folder-specific)
             folder: Folder name this message belongs to
             message_id: RFC 5322 Message-ID (globally unique)
@@ -92,7 +92,7 @@ class Message:
         """
         self._imap = imap
         self._smtp = smtp
-        self._default_sender = default_sender
+        self._default_from = default_from
         self._uid = uid
         self._folder = folder
         self._message_id = message_id
@@ -115,7 +115,7 @@ class Message:
         data: MessageData,
         imap: IMAPConnection,
         smtp: SMTPConnection,
-        default_sender: str,
+        default_from: str,
     ) -> "Message":
         """Create Message entity from MessageData DTO.
 
@@ -126,7 +126,7 @@ class Message:
             data: MessageData DTO from adapter
             imap: IMAP connection for operations
             smtp: SMTP connection for compose operations
-            default_sender: Default sender email (from Mailbox)
+            default_from: Default sender email (from Mailbox)
 
         Returns:
             Message entity with both IMAP and SMTP injected
@@ -159,7 +159,7 @@ class Message:
         return cls(
             imap=imap,
             smtp=smtp,
-            default_sender=default_sender,
+            default_from=default_from,
             uid=data.uid,
             folder=data.folder,
             message_id=data.message_id,
@@ -478,7 +478,7 @@ class Message:
         draft = Draft(
             smtp=self._smtp,
             imap=self._imap,
-            default_sender=self._default_sender or "",
+            default_from=self._default_from or "",
             reference_message=self,
             in_reply_to=self._message_id,
             references=self._references + [self._message_id],
@@ -524,7 +524,7 @@ class Message:
         draft = Draft(
             smtp=self._smtp,
             imap=self._imap,
-            default_sender=self._default_sender or "",
+            default_from=self._default_from or "",
             reference_message=self,
             in_reply_to=self._message_id,
             references=self._references + [self._message_id],
@@ -582,7 +582,7 @@ class Message:
         draft = Draft(
             smtp=self._smtp,
             imap=self._imap,
-            default_sender=self._default_sender or "",
+            default_from=self._default_from or "",
             reference_message=self,
             include_attachments=include_attachments,
             include_body=include_body,
@@ -642,7 +642,7 @@ class Message:
         draft = Draft(
             smtp=self._smtp,
             imap=self._imap,
-            default_sender=self._default_sender or "",
+            default_from=self._default_from or "",
             original_message_uid=self._uid,
             original_message_folder=self._folder,
             original_message_flags=self._flags.copy(),

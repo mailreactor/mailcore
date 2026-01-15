@@ -569,7 +569,7 @@ class SMTPConnection(ABC):
 
         Note:
             This property exposes the username for sender address resolution.
-            Mailbox uses this to auto-detect default_sender when not provided explicitly.
+            Mailbox uses this to auto-detect default_from when not provided explicitly.
 
         Example:
             >>> smtp = AIOSMTPAdapter(username='user@gmail.com', ...)
@@ -591,6 +591,13 @@ class SMTPConnection(ABC):
         attachments: list[Any] | None = None,  # list[Attachment] but avoiding circular import
         in_reply_to: str | None = None,
         references: list[str] | None = None,
+        reply_to: list[EmailAddress] | None = None,
+        sender: EmailAddress | None = None,
+        priority: str | None = None,
+        disposition_notification_to: str | None = None,
+        notify: str | None = None,
+        dsn_return: str | None = None,
+        dsn_envelope_id: str | None = None,
     ) -> SendResult:
         """Send email message.
 
@@ -605,6 +612,13 @@ class SMTPConnection(ABC):
             attachments: File attachments (optional)
             in_reply_to: Message-ID this replies to (for threading)
             references: Thread chain (list of Message-IDs)
+            reply_to: Reply-To addresses (RFC 5322 allows multiple)
+            sender: Sender header (RFC 5322 Section 3.6.2, different from From)
+            priority: Priority level string ('highest', 'high', 'normal', 'low', 'lowest')
+            disposition_notification_to: Read receipt email (RFC 3798 MDN)
+            notify: Delivery receipt notification types (RFC 3461 DSN, e.g., "SUCCESS,FAILURE,DELAY")
+            dsn_return: DSN return content ("full" or "headers") - what to include in bounce messages
+            dsn_envelope_id: DSN envelope ID (ENVID) - tracking identifier for bounces
 
         Returns:
             SendResult with message_id and recipient acceptance status
@@ -619,7 +633,9 @@ class SMTPConnection(ABC):
                 to=[EmailAddress("recipient@example.com")],
                 subject="Test",
                 body_text="Hello World",
-                body_html="<p>Hello World</p>"
+                body_html="<p>Hello World</p>",
+                reply_to=[EmailAddress("support@example.com")],
+                priority="high"
             )
             # Returns: SendResult(
             #     message_id='<msg-123@example.com>',
