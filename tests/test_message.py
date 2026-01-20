@@ -843,11 +843,11 @@ def test_message_from_data_smtp_not_none(mock_imap, mock_smtp):
 
 
 @pytest.mark.asyncio
-async def test_message_edit_requires_draft_flag(mock_imap, mock_smtp):
-    """Test that edit() validates MessageFlag.DRAFT is present."""
+async def test_message_edit_allows_any_message(mock_imap, mock_smtp):
+    """Test that edit() allows editing any message (drafts, sent, received)."""
     from mailcore.types import MessageFlag
 
-    # Sent message (no DRAFT flag)
+    # Sent message (no DRAFT flag) - should be editable
     message = Message(
         imap=mock_imap,
         smtp=mock_smtp,
@@ -864,8 +864,10 @@ async def test_message_edit_requires_draft_flag(mock_imap, mock_smtp):
         size=100,
     )
 
-    with pytest.raises(ValueError, match="Cannot edit message without.*Draft"):
-        await message.edit()
+    # Should not raise - any message can be edited
+    draft = await message.edit()
+    assert draft is not None
+    assert draft._subject == "Sent Message"
 
 
 @pytest.mark.asyncio

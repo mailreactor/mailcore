@@ -554,29 +554,63 @@ async def test_draft_save_allows_empty_draft(mock_smtp, mock_imap):
 
 
 @pytest.mark.asyncio
-async def test_draft_save_rejects_bcc(mock_smtp, mock_imap):
-    """Test that save() raises clear error if BCC is set (security requirement)."""
+async def test_draft_save_preserves_bcc(mock_smtp, mock_imap):
+    """Test that save() preserves BCC recipients (matches Outlook/Gmail behavior)."""
+    mock_imap.append_message = AsyncMock(return_value=456)
+
     draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
     draft.to("alice@example.com").subject("Test").bcc("secret@example.com")
 
-    with pytest.raises(ValueError) as exc_info:
-        await draft.save(folder="Drafts")
+    uid = await draft.save(folder="Drafts")
 
-    error_msg = str(exc_info.value)
-    assert "cannot preserve BCC" in error_msg
-    assert "security" in error_msg
-    assert "send() or remove BCC" in error_msg
+    # Verify no error raised
+    assert uid == 456
+
+    # Verify IMAP append_message was called with BCC
+    assert mock_imap.append_message.called
+    call_args = mock_imap.append_message.call_args
+
+    # Verify BCC is passed to IMAP
+    bcc_addrs = call_args.kwargs["bcc"]
+    assert bcc_addrs is not None
+    assert len(bcc_addrs) == 1
+    assert bcc_addrs[0].email == "secret@example.com"
+
+
+@pytest.mark.asyncio
+async def test_draft_save_to_sent_preserves_bcc(mock_smtp, mock_imap):
+    """Test that save() preserves BCC when saving to Sent folder."""
+    mock_imap.append_message = AsyncMock(return_value=789)
+
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
+    draft.to("alice@example.com").bcc("secret@example.com").subject("Test")
+
+    uid = await draft.save(folder="Sent")
+
+    # Verify saved to Sent folder
+    assert uid == 789
+    call_args = mock_imap.append_message.call_args
+    assert call_args.kwargs["folder"] == "Sent"
+
+    # Verify BCC preserved
+    bcc_addrs = call_args.kwargs["bcc"]
+    assert bcc_addrs is not None
+    assert len(bcc_addrs) == 1
+    assert bcc_addrs[0].email == "secret@example.com"
 
 
 @pytest.mark.asyncio
 async def test_draft_save_calls_imap_append_message(mock_smtp, mock_imap):
     """Test that save() calls IMAP append_message with correct parameters."""
+    from mailcore.types import MessageFlag
+
     mock_imap.append_message = AsyncMock(return_value=123)
 
     draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
     draft.to("alice@example.com").subject("Test Subject").body("Test Body")
 
-    uid = await draft.save(folder="Drafts")
+    # Explicitly specify DRAFT flag (no automatic flag addition)
+    uid = await draft.save(folder="Drafts", flags={MessageFlag.DRAFT})
 
     # Verify IMAP append_message was called
     assert mock_imap.append_message.called
@@ -585,9 +619,7 @@ async def test_draft_save_calls_imap_append_message(mock_smtp, mock_imap):
     # Verify UID returned
     assert uid == 123
 
-    # Verify flags include DRAFT
-    from mailcore.types import MessageFlag
-
+    # Verify flags include DRAFT (as explicitly specified)
     assert MessageFlag.DRAFT in call_args.kwargs["flags"]
 
 
@@ -683,7 +715,11 @@ async def test_draft_save_keeps_original_different_folder(mock_smtp, mock_imap):
 
 @pytest.mark.asyncio
 async def test_draft_save_handles_no_appenduid(mock_smtp, mock_imap):
-    """Test that save() handles servers without APPENDUID support (returns 0)."""
+    """Test that save() handles servers without APPENDUID support (returns 0).
+
+    Note: Current limitation - servers without APPENDUID will create duplicates
+    on repeated saves. This will be addressed in future refactor: edit() → to_draft().
+    """
     from mailcore.types import MessageFlag
 
     # Server doesn't support APPENDUID - returns 0
@@ -714,10 +750,70 @@ async def test_draft_save_handles_no_appenduid(mock_smtp, mock_imap):
     assert draft._original_message_uid == 0
 
     # Second save won't try to delete UID 0 (None check prevents it)
+    # LIMITATION: This creates a duplicate (can't track which message to delete)
     mock_imap.delete_message.reset_mock()
     await draft.save(folder="Drafts")
-    # delete_message not called because original_uid is 0 (falsy, not None)
+    # delete_message not called because original_uid is 0 (falsy in condition)
     assert not mock_imap.delete_message.called
+
+
+@pytest.mark.asyncio
+async def test_draft_save_edited_message_defaults_to_original_folder(mock_smtp, mock_imap):
+    """Test that save() without folder parameter defaults to original folder for edited messages."""
+    from mailcore.types import MessageFlag
+
+    mock_imap.append_message = AsyncMock(return_value=999)
+    mock_imap.delete_message = AsyncMock()
+
+    # Create draft from edit (simulating message.edit())
+    draft = Draft(
+        smtp=mock_smtp,
+        imap=mock_imap,
+        default_from="me@example.com",
+        original_message_uid=42,
+        original_message_folder="INBOX",  # Original folder
+        original_message_flags={MessageFlag.SEEN},
+        original_custom_flags=set(),
+    )
+    draft.to("alice@example.com").subject("Updated").body("Updated content")
+
+    # Save WITHOUT specifying folder - should default to "INBOX"
+    uid = await draft.save()
+
+    # Verify saved successfully
+    assert uid == 999
+
+    # Verify saved to original folder
+    call_args = mock_imap.append_message.call_args
+    assert call_args.kwargs["folder"] == "INBOX"
+
+    # Verify original deleted (same folder replace)
+    assert mock_imap.delete_message.called
+    delete_call = mock_imap.delete_message.call_args
+    assert delete_call.kwargs["folder"] == "INBOX"
+    assert delete_call.kwargs["uid"] == 42
+
+
+@pytest.mark.asyncio
+async def test_draft_save_new_draft_requires_folder(mock_smtp, mock_imap):
+    """Test that save() raises error when folder is None for new drafts."""
+    mock_imap.append_message = AsyncMock(return_value=123)
+
+    # Create new draft (no original_message_folder)
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
+    draft.to("alice@example.com").subject("New draft").body("Content")
+
+    # Save without folder should raise ValueError
+    with pytest.raises(ValueError, match="folder parameter is required for new drafts"):
+        await draft.save()
+
+    # Verify IMAP append NOT called
+    assert not mock_imap.append_message.called
+
+    # Verify explicit folder still works
+    uid = await draft.save(folder="Drafts")
+    assert uid == 123
+    assert mock_imap.append_message.called
 
 
 # ==============================================================================

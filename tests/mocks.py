@@ -438,6 +438,7 @@ class MockIMAPConnection(IMAPConnection):
         body_text: str | None = None,
         body_html: str | None = None,
         cc: list[EmailAddress] | None = None,
+        bcc: list[EmailAddress] | None = None,
         attachments: list[Any] | None = None,
         in_reply_to: str | None = None,
         references: list[str] | None = None,
@@ -447,6 +448,7 @@ class MockIMAPConnection(IMAPConnection):
         """Append message to folder with specified flags.
 
         Delegates to _add_message helper with flags support.
+        BCC is preserved in the mock (matches real IMAP behavior for saved messages).
         """
         # Ensure folder exists
         if folder not in self._folders:

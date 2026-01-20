@@ -353,6 +353,7 @@ class IMAPConnection(ABC):
         body_text: str | None = None,
         body_html: str | None = None,
         cc: list[EmailAddress] | None = None,
+        bcc: list[EmailAddress] | None = None,
         attachments: list[Any] | None = None,  # list[Attachment] but avoiding circular import
         in_reply_to: str | None = None,
         references: list[str] | None = None,
@@ -362,7 +363,7 @@ class IMAPConnection(ABC):
         """Append message to IMAP folder.
 
         Adapter builds RFC 5322 MIME message from domain types.
-        BCC intentionally excluded (security requirement).
+        BCC is preserved in saved IMAP messages (matches Outlook/Gmail behavior).
         Preserves both standard and custom flags when provided.
 
         IMAP operation: SELECT + APPEND
@@ -375,6 +376,7 @@ class IMAPConnection(ABC):
             body_text: Plain text body (optional)
             body_html: HTML body (optional)
             cc: CC recipients (optional)
+            bcc: BCC recipients (optional, preserved in saved messages)
             attachments: File attachments (optional)
             in_reply_to: Message-ID this replies to (optional)
             references: Thread chain (optional)

@@ -599,7 +599,6 @@ class Message:
     async def edit(self) -> "Draft":
         """Convert message to editable draft.
 
-        Only messages with \\Draft flag can be edited (security requirement).
         Fetches body immediately (eager loading).
         Returned draft tracks origin (UID, folder, flags) for smart save behavior.
 
@@ -607,11 +606,12 @@ class Message:
             Draft pre-populated with message fields
 
         Raises:
-            ValueError: If message does not have \\Draft flag or SMTP connection not available
+            ValueError: If SMTP connection not available
 
         Note:
-            Only saved drafts can be edited. Sent or received messages cannot be edited
-            (security/safety requirement).
+            Any message can be edited (drafts, sent, received). The caller is responsible
+            for managing flags when saving - e.g., use flags={MessageFlag.DRAFT} when
+            saving to Drafts folder, or preserve original flags when replacing.
 
         Examples:
             >>> # Edit saved draft
@@ -619,20 +619,16 @@ class Message:
             >>> draft_msg = drafts[0]
             >>> editable = await draft_msg.edit()
             >>> editable.body('Updated content')
-            >>> await editable.send()
+            >>> await editable.save(folder='Drafts', flags={MessageFlag.DRAFT})
 
-            >>> # Or save again
-            >>> uid = await editable.save(folder='Drafts')  # Replaces original
+            >>> # Edit sent message
+            >>> sent = await mailbox.folders['Sent'].list()[0]
+            >>> editable = await sent.edit()
+            >>> editable.subject('Corrected subject')
+            >>> await editable.save(folder='Sent', flags=sent.flags)  # Preserve original flags
         """
         # Lazy import to avoid circular import at module level
         from mailcore.draft import Draft
-
-        # SECURITY: Only allow editing actual drafts
-        if MessageFlag.DRAFT not in self._flags:
-            raise ValueError(
-                "Cannot edit message without \\Draft flag. "
-                "Only saved drafts can be edited (sent/received messages are immutable)."
-            )
 
         # Require SMTP connection
         if self._smtp is None:
