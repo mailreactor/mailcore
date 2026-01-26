@@ -596,36 +596,24 @@ class Message:
 
         return draft
 
-    async def edit(self) -> "Draft":
-        """Convert message to editable draft.
+    async def to_draft(self) -> "Draft":
+        """Copy message content into a new draft.
 
-        Fetches body immediately (eager loading).
-        Returned draft tracks origin (UID, folder, flags) for smart save behavior.
+        Creates a new Draft with this message's content (to, cc, subject, body).
+        The original message is unchanged. You must explicitly delete() it if needed.
 
         Returns:
-            Draft pre-populated with message fields
+            Draft with copied content, ready for editing and saving
 
         Raises:
             ValueError: If SMTP connection not available
 
-        Note:
-            Any message can be edited (drafts, sent, received). The caller is responsible
-            for managing flags when saving - e.g., use flags={MessageFlag.DRAFT} when
-            saving to Drafts folder, or preserve original flags when replacing.
-
         Examples:
-            >>> # Edit saved draft
-            >>> drafts = await mailbox.folders['Drafts'].list()
-            >>> draft_msg = drafts[0]
-            >>> editable = await draft_msg.edit()
-            >>> editable.body('Updated content')
-            >>> await editable.save(folder='Drafts', flags={MessageFlag.DRAFT})
-
-            >>> # Edit sent message
-            >>> sent = await mailbox.folders['Sent'].list()[0]
-            >>> editable = await sent.edit()
-            >>> editable.subject('Corrected subject')
-            >>> await editable.save(folder='Sent', flags=sent.flags)  # Preserve original flags
+            >>> msg = await inbox.list()[0]
+            >>> d = await msg.to_draft()
+            >>> d.body("Updated content")
+            >>> await d.save(folder='Drafts')  # Creates new message
+            >>> await msg.delete()  # Optionally delete original
         """
         # Lazy import to avoid circular import at module level
         from mailcore.draft import Draft
@@ -634,24 +622,23 @@ class Message:
         if self._smtp is None:
             raise ValueError("SMTP connection not available - Message must come from Folder query")
 
-        # Create Draft with origin tracking
+        # Copy to, cc, subject, body - NO TRACKING
         draft = Draft(
             smtp=self._smtp,
             imap=self._imap,
             default_from=self._default_from or "",
-            original_message_uid=self._uid,
-            original_message_folder=self._folder,
-            original_message_flags=self._flags.copy(),
-            original_custom_flags=self._custom_flags.copy(),
         )
 
-        # Pre-populate: to, cc, subject
-        draft.to([addr.to_rfc5322() for addr in self._to])
+        # Copy recipients
+        if self._to:
+            draft.to([addr.to_rfc5322() for addr in self._to])
         if self._cc:
             draft.cc([addr.to_rfc5322() for addr in self._cc])
-        draft.subject(self._subject)
 
-        # Fetch and populate body (eager loading)
+        # Copy subject and body
+        if self._subject:
+            draft.subject(self._subject)
+
         text = await self.body.get_text()
         if text:
             draft.body(text)

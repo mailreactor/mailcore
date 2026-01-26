@@ -624,196 +624,47 @@ async def test_draft_save_calls_imap_append_message(mock_smtp, mock_imap):
 
 
 @pytest.mark.asyncio
-async def test_draft_save_preserves_flags_when_editing(mock_smtp, mock_imap):
-    """Test that save() preserves flags from original message (except Recent)."""
-    from mailcore.types import MessageFlag
-
-    mock_imap.append_message = AsyncMock(return_value=456)
-    mock_imap.delete_message = AsyncMock()
-
-    # Create draft from edit (with original flags)
-    draft = Draft(
-        smtp=mock_smtp,
-        imap=mock_imap,
-        default_from="me@example.com",
-        original_message_uid=42,
-        original_message_folder="Drafts",
-        original_message_flags={MessageFlag.DRAFT, MessageFlag.SEEN, MessageFlag.RECENT},
-        original_custom_flags={"$Forwarded"},
-    )
-    draft.to("alice@example.com").subject("Updated").body("Updated body")
-
-    await draft.save(folder="Drafts")
-
-    call_args = mock_imap.append_message.call_args
-
-    # Verify flags preserved (except RECENT)
-    assert MessageFlag.DRAFT in call_args.kwargs["flags"]
-    assert MessageFlag.SEEN in call_args.kwargs["flags"]
-    assert MessageFlag.RECENT not in call_args.kwargs["flags"]
-
-    # Verify custom flags preserved
-    assert "$Forwarded" in call_args.kwargs["custom_flags"]
-
-
-@pytest.mark.asyncio
-async def test_draft_save_replaces_original_same_folder(mock_smtp, mock_imap):
-    """Test that save() deletes original when saving to same folder."""
-    from mailcore.types import MessageFlag
-
-    mock_imap.append_message = AsyncMock(return_value=456)
-    mock_imap.delete_message = AsyncMock()
-
-    # Create draft from edit
-    draft = Draft(
-        smtp=mock_smtp,
-        imap=mock_imap,
-        default_from="me@example.com",
-        original_message_uid=42,
-        original_message_folder="Drafts",
-        original_message_flags={MessageFlag.DRAFT},
-        original_custom_flags=set(),
-    )
-    draft.to("alice@example.com").subject("Updated").body("Updated")
-
-    # Save to same folder
-    await draft.save(folder="Drafts")
-
-    # Verify original deleted
-    assert mock_imap.delete_message.called
-    delete_call = mock_imap.delete_message.call_args
-    assert delete_call.kwargs["folder"] == "Drafts"
-    assert delete_call.kwargs["uid"] == 42
-
-
-@pytest.mark.asyncio
-async def test_draft_save_keeps_original_different_folder(mock_smtp, mock_imap):
-    """Test that save() keeps original when saving to different folder."""
-    from mailcore.types import MessageFlag
-
-    mock_imap.append_message = AsyncMock(return_value=456)
-    mock_imap.delete_message = AsyncMock()
-
-    # Create draft from edit
-    draft = Draft(
-        smtp=mock_smtp,
-        imap=mock_imap,
-        default_from="me@example.com",
-        original_message_uid=42,
-        original_message_folder="Drafts",
-        original_message_flags={MessageFlag.DRAFT},
-        original_custom_flags=set(),
-    )
-    draft.to("alice@example.com").subject("Updated").body("Updated")
-
-    # Save to different folder
-    await draft.save(folder="Archive")
-
-    # Verify original NOT deleted
-    assert not mock_imap.delete_message.called
-
-
-@pytest.mark.asyncio
-async def test_draft_save_handles_no_appenduid(mock_smtp, mock_imap):
-    """Test that save() handles servers without APPENDUID support (returns 0).
-
-    Note: Current limitation - servers without APPENDUID will create duplicates
-    on repeated saves. This will be addressed in future refactor: edit() → to_draft().
-    """
-    from mailcore.types import MessageFlag
-
-    # Server doesn't support APPENDUID - returns 0
-    mock_imap.append_message = AsyncMock(return_value=0)
-    mock_imap.delete_message = AsyncMock()
-
-    draft = Draft(
-        smtp=mock_smtp,
-        imap=mock_imap,
-        default_from="me@example.com",
-        original_message_uid=42,
-        original_message_folder="Drafts",
-        original_message_flags={MessageFlag.DRAFT},
-        original_custom_flags=set(),
-    )
-    draft.to("alice@example.com").subject("Test").body("Body")
-
-    # Save (will delete original but can't get new UID)
-    uid = await draft.save(folder="Drafts")
-
-    # Returns 0 (no APPENDUID)
-    assert uid == 0
-
-    # Original still deleted (replace happened)
-    assert mock_imap.delete_message.called
-
-    # Tracking updated to 0 (original UID 42 no longer valid after delete)
-    assert draft._original_message_uid == 0
-
-    # Second save won't try to delete UID 0 (None check prevents it)
-    # LIMITATION: This creates a duplicate (can't track which message to delete)
-    mock_imap.delete_message.reset_mock()
-    await draft.save(folder="Drafts")
-    # delete_message not called because original_uid is 0 (falsy in condition)
-    assert not mock_imap.delete_message.called
-
-
-@pytest.mark.asyncio
-async def test_draft_save_edited_message_defaults_to_original_folder(mock_smtp, mock_imap):
-    """Test that save() without folder parameter defaults to original folder for edited messages."""
-    from mailcore.types import MessageFlag
-
-    mock_imap.append_message = AsyncMock(return_value=999)
-    mock_imap.delete_message = AsyncMock()
-
-    # Create draft from edit (simulating message.edit())
-    draft = Draft(
-        smtp=mock_smtp,
-        imap=mock_imap,
-        default_from="me@example.com",
-        original_message_uid=42,
-        original_message_folder="INBOX",  # Original folder
-        original_message_flags={MessageFlag.SEEN},
-        original_custom_flags=set(),
-    )
-    draft.to("alice@example.com").subject("Updated").body("Updated content")
-
-    # Save WITHOUT specifying folder - should default to "INBOX"
-    uid = await draft.save()
-
-    # Verify saved successfully
-    assert uid == 999
-
-    # Verify saved to original folder
-    call_args = mock_imap.append_message.call_args
-    assert call_args.kwargs["folder"] == "INBOX"
-
-    # Verify original deleted (same folder replace)
-    assert mock_imap.delete_message.called
-    delete_call = mock_imap.delete_message.call_args
-    assert delete_call.kwargs["folder"] == "INBOX"
-    assert delete_call.kwargs["uid"] == 42
-
-
-@pytest.mark.asyncio
-async def test_draft_save_new_draft_requires_folder(mock_smtp, mock_imap):
-    """Test that save() raises error when folder is None for new drafts."""
+async def test_draft_save_requires_folder_parameter(mock_smtp, mock_imap):
+    """Test that save() requires folder parameter."""
     mock_imap.append_message = AsyncMock(return_value=123)
 
-    # Create new draft (no original_message_folder)
+    # Create new draft
     draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
     draft.to("alice@example.com").subject("New draft").body("Content")
 
-    # Save without folder should raise ValueError
-    with pytest.raises(ValueError, match="folder parameter is required for new drafts"):
-        await draft.save()
+    # Save without folder should raise TypeError (missing required argument)
+    with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        await draft.save()  # type: ignore
 
     # Verify IMAP append NOT called
     assert not mock_imap.append_message.called
 
-    # Verify explicit folder still works
+    # Verify explicit folder works
     uid = await draft.save(folder="Drafts")
     assert uid == 123
     assert mock_imap.append_message.called
+
+
+@pytest.mark.asyncio
+async def test_save_same_folder_creates_duplicates(mock_smtp, mock_imap):
+    """Test that repeated save() to same folder creates duplicates (no auto-delete)."""
+    from mailcore.types import MessageFlag
+
+    mock_imap.append_message = AsyncMock(side_effect=[100, 101])
+
+    draft = Draft(smtp=mock_smtp, imap=mock_imap, default_from="me@example.com")
+    draft.to("alice@example.com").subject("Draft").body("Content")
+
+    # Save twice to same folder
+    uid1 = await draft.save(folder="Drafts", flags={MessageFlag.DRAFT})
+    uid2 = await draft.save(folder="Drafts", flags={MessageFlag.DRAFT})
+
+    # Both saves succeeded, returned different UIDs
+    assert uid1 == 100
+    assert uid2 == 101
+
+    # Verify append_message called twice (creates 2 messages)
+    assert mock_imap.append_message.call_count == 2
 
 
 # ==============================================================================
